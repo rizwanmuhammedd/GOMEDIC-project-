@@ -29,25 +29,27 @@ public class AppointmentService : IAppointmentService
     public async Task<List<AppointmentResponseDto>> GetAllAsync()
     {
         var list = await _repository.GetAllAsync();
-        return list.Select(MapToDto).ToList();
+        return await PopulatePatientDetailsAsync(list.Select(MapToDto).ToList());
     }
 
     public async Task<AppointmentResponseDto?> GetByIdAsync(int id)
     {
         var a = await _repository.GetByIdAsync(id);
-        return a == null ? null : MapToDto(a);
+        if (a == null) return null;
+        var list = await PopulatePatientDetailsAsync(new List<AppointmentResponseDto> { MapToDto(a) });
+        return list.FirstOrDefault();
     }
 
     public async Task<List<AppointmentResponseDto>> GetMyAppointmentsAsync(int patientId)
     {
         var list = await _repository.GetByPatientIdAsync(patientId);
-        return list.Select(MapToDto).ToList();
+        return await PopulatePatientDetailsAsync(list.Select(MapToDto).ToList());
     }
 
     public async Task<List<AppointmentResponseDto>> GetDoctorAppointmentsAsync(int doctorId)
     {
         var list = await _repository.GetByDoctorIdAsync(doctorId);
-        return list.Select(MapToDto).ToList();
+        return await PopulatePatientDetailsAsync(list.Select(MapToDto).ToList());
     }
 
     public async Task<List<AppointmentResponseDto>> GetByDoctorUserIdAsync(int userId)
@@ -55,6 +57,50 @@ public class AppointmentService : IAppointmentService
         var doctor = await _doctorRepo.GetByUserIdAsync(userId);
         if (doctor == null) return new List<AppointmentResponseDto>();
         return await GetDoctorAppointmentsAsync(doctor.Id);
+    }
+
+    private async Task<List<AppointmentResponseDto>> PopulatePatientDetailsAsync(List<AppointmentResponseDto> dtos)
+    {
+        var client = _httpClient; 
+        foreach (var dto in dtos)
+        {
+            // Fetch if name is missing OR age is zero (might be uninitialized)
+            if (string.IsNullOrEmpty(dto.PatientName) || dto.PatientName == "Unknown" || dto.PatientAge == 0)
+            {
+                try
+                {
+                    var userRes = await client.GetAsync($"http://localhost:5001/api/auth/users/{dto.PatientId}");
+                    if (userRes.IsSuccessStatusCode)
+                    {
+                        var user = await userRes.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                        
+                        if (user.TryGetProperty("fullName", out var nameProp))
+                            dto.PatientName = nameProp.GetString() ?? dto.PatientName;
+
+                        if (user.TryGetProperty("phone", out var phoneProp))
+                            dto.PatientPhone = phoneProp.GetString() ?? dto.PatientPhone;
+
+                        if (user.TryGetProperty("dateOfBirth", out var dobProp) && dobProp.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        {
+                            var dobStr = dobProp.GetString();
+                            if (!string.IsNullOrEmpty(dobStr))
+                            {
+                                // Resilient parsing: try DateOnly then DateTime
+                                if (DateTime.TryParse(dobStr, out var dt))
+                                {
+                                    var today = DateTime.Today;
+                                    int age = today.Year - dt.Year;
+                                    if (dt.Date > today.AddYears(-age)) age--;
+                                    dto.PatientAge = age >= 0 ? age : 0;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { /* Silent fail to avoid crashing the whole list */ }
+            }
+        }
+        return dtos;
     }
 
     public async Task<AppointmentResponseDto> BookAsync(int patientId, BookAppointmentDto dto)
@@ -174,6 +220,10 @@ public class AppointmentService : IAppointmentService
 
     public async Task<List<string>> GetAvailableSlotsAsync(int doctorId, DateOnly date)
     {
+        var doctor = await _doctorRepo.GetByIdAsync(doctorId);
+        int duration = doctor?.AppointmentDuration ?? 15;
+        if (duration <= 0) duration = 15;
+
         var schedules = await _scheduleRepo.GetByDoctorAndDateAsync(doctorId, date);
         var activeSchedules = schedules.Where(s => !s.IsLeave).ToList();
 
@@ -184,11 +234,9 @@ public class AppointmentService : IAppointmentService
 
         foreach (var shift in activeSchedules)
         {
-            var start = shift.ShiftStart;
-            var end = shift.ShiftEnd;
-
-            var current = start;
-            while (current <= end)
+            var current = shift.ShiftStart;
+            // Use same real-life logic: slot must end within shift
+            while (current.AddMinutes(duration) <= shift.ShiftEnd)
             {
                 var timeStr = current.ToString("HH:mm");
                 if (bookedTimes.Contains(timeStr))
@@ -199,12 +247,13 @@ public class AppointmentService : IAppointmentService
                 {
                     allPossibleSlots.Add(timeStr);
                 }
-                current = current.AddMinutes(15);
+                current = current.AddMinutes(duration);
             }
         }
 
         return allPossibleSlots
             .OrderBy(s => s)
+            .Distinct()
             .ToList();
     }
 

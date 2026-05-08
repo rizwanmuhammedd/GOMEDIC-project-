@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Card, PageHeader, Input, Button, Badge, LoadingSpinner } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import { authApi } from '../api/axiosInstance';
+import { authApi, doctorApi } from '../api/axiosInstance';
 import { useNotifications } from '../context/NotificationContext';
 import { gsap } from 'gsap';
 
@@ -23,10 +23,26 @@ const ProfilePage: React.FC = () => {
   const { user } = useAuth();
   const { addToast } = useNotifications();
   const [loading, setLoading] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [passForm, setPassForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [profileForm, setProfileForm] = useState({ 
+    fullName: user?.fullName || '', 
+    phone: user?.phone || '', 
+    dateOfBirth: user?.dateOfBirth || '' 
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (user) {
+        setProfileForm({
+            fullName: user.fullName,
+            phone: user.phone || '',
+            dateOfBirth: user.dateOfBirth || ''
+        });
+    }
+  }, [user]);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -40,6 +56,30 @@ const ProfilePage: React.FC = () => {
     }, containerRef);
     return () => ctx.revert();
   }, []);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUpdating(true);
+    try {
+        await authApi.updateProfile(profileForm);
+        
+        if (user) {
+            const updatedUser = { 
+                ...user, 
+                fullName: profileForm.fullName, 
+                phone: profileForm.phone, 
+                dateOfBirth: profileForm.dateOfBirth 
+            };
+            localStorage.setItem('hms_user', JSON.stringify(updatedUser));
+            addToast({ type: 'success', title: 'Profile Updated', message: 'Your details have been synchronized.' });
+            setTimeout(() => window.location.reload(), 800);
+        }
+    } catch (err: any) {
+        addToast({ type: 'error', title: 'Update Failed', message: err.response?.data?.message || 'Error' });
+    } finally {
+        setUpdating(false);
+    }
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -191,6 +231,45 @@ const ProfilePage: React.FC = () => {
 
         {/* Right Column: Security Forms */}
         <div className="lg:col-span-8 space-y-8 profile-animate">
+          {/* PROFILE UPDATE CARD */}
+          <Card
+            title={
+              <div className="flex items-center gap-2">
+                <Settings strokeWidth={2} className="w-4 h-4 text-zinc-500" />
+                <span>Profile Synchronization</span>
+              </div>
+            }
+          >
+            <form onSubmit={handleUpdateProfile} className="space-y-6">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Input 
+                    label="Official Full Name"
+                    value={profileForm.fullName}
+                    onChange={(e: any) => setProfileForm({ ...profileForm, fullName: e.target.value })}
+                    required
+                  />
+                  <Input 
+                    label="Verified Phone Vector"
+                    value={profileForm.phone}
+                    onChange={(e: any) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                    required
+                  />
+                  <Input 
+                    label="Date of Birth"
+                    type="date"
+                    value={profileForm.dateOfBirth}
+                    onChange={(e: any) => setProfileForm({ ...profileForm, dateOfBirth: e.target.value })}
+                    required
+                  />
+               </div>
+               <div className="pt-2">
+                  <Button type="submit" loading={updating} className="w-full md:w-auto h-11 px-8 bg-zinc-900 text-white hover:bg-zinc-800">
+                    Sync Personal Details
+                  </Button>
+               </div>
+            </form>
+          </Card>
+
           <Card
             title={
               <div className="flex items-center gap-2">

@@ -10,4 +10,9 @@ public interface IChatRepository
     Task<List<ChatMessage>> GetHistoryAsync(string patientId);
     Task<IEnumerable<object>> GetUniquePatientsWithStatsAsync();
     Task MarkAsReadAsync(string patientId);
+    Task BlockUserAsync(string patientId, string? patientName, string? reason);
+    Task UnblockUserAsync(string patientId);
+    Task<bool> IsUserBlockedAsync(string patientId);
+    Task<int> GetDailyMessageCountAsync(string patientId);
+    Task<int> GetRecentMessageCountAsync(string patientId, int minutes);
 }

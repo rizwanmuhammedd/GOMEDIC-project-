@@ -37,8 +37,7 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 };
 
 const DashboardRouter: React.FC = () => {
-  const { user, isLoading } = useAuth();
-  if (isLoading) return <LoadingSpinner />;
+  const { user } = useAuth();
   if (!user) return <Navigate to="/" replace />;
   
   const dashboards: Record<Role, React.ReactNode> = {
@@ -53,50 +52,45 @@ const DashboardRouter: React.FC = () => {
   return <>{dashboards[user.role]}</>;
 };
 
-function AppContent() {
-  const { user } = useAuth();
+import { Outlet } from 'react-router-dom';
+
+const AuthenticatedLayout: React.FC = () => {
   return (
-    <>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route 
-          path="/dashboard" 
-          element={
-            <PrivateRoute>
-              <MainLayout>
-                <DashboardRouter />
-              </MainLayout>
-            </PrivateRoute>
-          } 
-        />
-        <Route path="/appointments" element={<PrivateRoute><MainLayout><DashboardRouter /></MainLayout></PrivateRoute>} />
-        <Route path="/bills" element={<PrivateRoute><MainLayout><DashboardRouter /></MainLayout></PrivateRoute>} />
-        <Route path="/billing" element={<PrivateRoute><MainLayout><DashboardRouter /></MainLayout></PrivateRoute>} />
-        <Route path="/admissions" element={<PrivateRoute><MainLayout><DashboardRouter /></MainLayout></PrivateRoute>} />
-        <Route path="/prescriptions" element={<PrivateRoute><MainLayout><DashboardRouter /></MainLayout></PrivateRoute>} />
-        <Route path="/medicines" element={<PrivateRoute><MainLayout><DashboardRouter /></MainLayout></PrivateRoute>} />
-        <Route path="/staff" element={<PrivateRoute><MainLayout><DashboardRouter /></MainLayout></PrivateRoute>} />
-        <Route path="/pharmacy" element={<PrivateRoute><MainLayout><DashboardRouter /></MainLayout></PrivateRoute>} />
-        <Route path="/beds" element={<PrivateRoute><MainLayout><DashboardRouter /></MainLayout></PrivateRoute>} />
-        <Route path="/analytics" element={<PrivateRoute><MainLayout><DashboardRouter /></MainLayout></PrivateRoute>} />
-        <Route path="/schedule" element={<PrivateRoute><MainLayout><DoctorSchedulePage /></MainLayout></PrivateRoute>} />
-        <Route 
-          path="/profile" 
-          element={
-            <PrivateRoute>
-              <MainLayout>
-                <ProfilePage />
-              </MainLayout>
-            </PrivateRoute>
-          } 
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-      {user?.role === 'Patient' && <EnquiryChat />}
-    </>
+    <PrivateRoute>
+      <MainLayout>
+        <Outlet />
+      </MainLayout>
+    </PrivateRoute>
+  );
+};
+
+function AppContent() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      
+      {/* Protected Routes sharing the same Layout instance */}
+      <Route element={<AuthenticatedLayout />}>
+        <Route path="/dashboard" element={<DashboardRouter />} />
+        <Route path="/appointments" element={<DashboardRouter />} />
+        <Route path="/bills" element={<DashboardRouter />} />
+        <Route path="/billing" element={<DashboardRouter />} />
+        <Route path="/admissions" element={<DashboardRouter />} />
+        <Route path="/prescriptions" element={<DashboardRouter />} />
+        <Route path="/medicines" element={<DashboardRouter />} />
+        <Route path="/staff" element={<DashboardRouter />} />
+        <Route path="/pharmacy" element={<DashboardRouter />} />
+        <Route path="/beds" element={<DashboardRouter />} />
+        <Route path="/analytics" element={<DashboardRouter />} />
+        <Route path="/schedule" element={<DoctorSchedulePage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 

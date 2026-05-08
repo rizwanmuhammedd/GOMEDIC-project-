@@ -7,6 +7,7 @@ namespace HospitalMS.HospitalOpsService.Application.Interfaces;
 public interface IPrescriptionService
 {
     Task<PrescriptionResponseDto> CreateAsync(int doctorId, CreatePrescriptionDto dto);
+    Task<PrescriptionResponseDto> UpdateAsync(int prescriptionId, int doctorId, CreatePrescriptionDto dto);
     Task<PrescriptionResponseDto> DispenseAsync(int prescriptionId, int pharmacistId);
     Task<List<PrescriptionResponseDto>> GetPendingAsync();
     Task<List<PrescriptionResponseDto>> GetByPatientAsync(int patientId);

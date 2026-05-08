@@ -56,6 +56,23 @@ public class AuthController : ControllerBase
         return Ok(users);
     }
 
+    [HttpGet("users/{id}")]
+    [AllowAnonymous] // Internal use for other microservices
+    public async Task<IActionResult> GetUserById(int id)
+    {
+        var user = await _authService.GetUserByIdAsync(id);
+        if (user == null) return NotFound();
+        return Ok(new { 
+            id = user.Id, 
+            email = user.Email, 
+            fullName = user.FullName,
+            role = user.Role,
+            phone = user.Phone,
+            dateOfBirth = user.DateOfBirth,
+            profileImageUrl = user.ProfileImageUrl
+        });
+    }
+
     [HttpDelete("users/{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeactivateUser(int id)
@@ -232,6 +249,24 @@ public class AuthController : ControllerBase
         {
             await _authService.UpdateProfileImageAsync(userId, dto.ImageUrl);
             return Ok(new { imageUrl = dto.ImageUrl });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPatch("profile")]
+    [Authorize]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
+    {
+        try
+        {
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userIdStr == null) return Unauthorized();
+            
+            await _authService.UpdateProfileAsync(int.Parse(userIdStr), dto);
+            return Ok(new { message = "Profile updated successfully" });
         }
         catch (Exception ex)
         {

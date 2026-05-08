@@ -125,6 +125,7 @@ public class DoctorService : IDoctorService
             LicenseNumber = dto.LicenseNumber,
             ConsultationFee = dto.ConsultationFee,
             MaxPatientsPerDay = dto.MaxPatientsPerDay,
+            AppointmentDuration = dto.AppointmentDuration,
             IsAvailable = true,
             CreatedAt = DateTime.UtcNow
         };
@@ -145,6 +146,7 @@ public class DoctorService : IDoctorService
         existing.ConsultationFee = dto.ConsultationFee;
         existing.MaxPatientsPerDay = dto.MaxPatientsPerDay;
         existing.IsAvailable = dto.IsAvailable;
+        existing.AppointmentDuration = dto.AppointmentDuration;
 
         await _repository.UpdateAsync(existing);
     }
@@ -160,6 +162,15 @@ public class DoctorService : IDoctorService
     {
         var doctor = await _repository.GetByIdAsync(id) ?? throw new Exception("Doctor not found");
         doctor.IsAvailable = !doctor.IsAvailable;
+        await _repository.UpdateAsync(doctor);
+    }
+
+    public async Task UpdateSlotDurationAsync(int userId, int duration)
+    {
+        var doctor = await _repository.GetByUserIdAsync(userId) 
+            ?? throw new Exception("Doctor profile not found");
+        
+        doctor.AppointmentDuration = duration;
         await _repository.UpdateAsync(doctor);
     }
 
@@ -186,6 +197,21 @@ public class DoctorService : IDoctorService
         return MapToScheduleDto(saved);
     }
 
+    public async Task UpdateScheduleAsync(int scheduleId, CreateDoctorScheduleDto dto)
+    {
+        var existing = await _scheduleRepo.GetByIdAsync(scheduleId) 
+            ?? throw new Exception("Schedule not found");
+
+        existing.ScheduleDate = DateOnly.Parse(dto.ScheduleDate);
+        existing.ShiftType = dto.ShiftType;
+        existing.ShiftStart = TimeOnly.Parse(dto.ShiftStart);
+        existing.ShiftEnd = TimeOnly.Parse(dto.ShiftEnd);
+        existing.IsLeave = dto.IsLeave;
+        existing.LeaveReason = dto.LeaveReason;
+
+        await _scheduleRepo.UpdateAsync(existing);
+    }
+
     public async Task DeleteScheduleAsync(int scheduleId)
     {
         await _scheduleRepo.DeleteAsync(scheduleId);
@@ -193,6 +219,10 @@ public class DoctorService : IDoctorService
 
     public async Task<List<string>> GetAvailableTimeSlotsAsync(int doctorId, DateOnly date)
     {
+        var doctor = await _repository.GetByIdAsync(doctorId);
+        int duration = doctor?.AppointmentDuration ?? 15;
+        if (duration <= 0) duration = 15;
+
         var schedules = await _scheduleRepo.GetByDoctorAndDateAsync(doctorId, date);
         var activeSchedules = schedules.Where(s => !s.IsLeave).ToList();
 
@@ -205,10 +235,11 @@ public class DoctorService : IDoctorService
         foreach (var schedule in activeSchedules)
         {
             var current = schedule.ShiftStart;
-            while (current <= schedule.ShiftEnd)
+            // A slot starting at ShiftEnd is not valid as it would exceed the shift.
+            // So we use current.AddMinutes(duration) <= schedule.ShiftEnd
+            while (current.AddMinutes(duration) <= schedule.ShiftEnd)
             {
                 var timeStr = current.ToString("HH:mm");
-                // If booked, we add a suffix '::booked' so frontend knows
                 if (bookedTimes.Contains(timeStr))
                 {
                     slots.Add($"{timeStr}::booked");
@@ -217,11 +248,11 @@ public class DoctorService : IDoctorService
                 {
                     slots.Add(timeStr);
                 }
-                current = current.AddMinutes(15);
+                current = current.AddMinutes(duration);
             }
         }
 
-        return slots.OrderBy(s => s).ToList();
+        return slots.OrderBy(s => s).Distinct().ToList();
     }
 
     private DoctorDto MapToDto(Doctor d) => new DoctorDto
@@ -237,7 +268,8 @@ public class DoctorService : IDoctorService
         LicenseNumber = d.LicenseNumber,
         ConsultationFee = d.ConsultationFee,
         MaxPatientsPerDay = d.MaxPatientsPerDay,
-        IsAvailable = d.IsAvailable
+        IsAvailable = d.IsAvailable,
+        AppointmentDuration = d.AppointmentDuration
     };
 
     private DoctorScheduleDto MapToScheduleDto(DoctorSchedule s) => new DoctorScheduleDto

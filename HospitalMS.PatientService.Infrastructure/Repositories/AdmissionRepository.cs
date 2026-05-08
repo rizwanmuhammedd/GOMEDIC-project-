@@ -14,7 +14,7 @@ public class AdmissionRepository : IAdmissionRepository
     public AdmissionRepository(PatientDbContext db) => _db = db;
     public async Task<List<Admission>> GetAllActiveAsync()
         => await _db.Admissions
-            .Where(a => a.Status == "Admitted")
+            .Where(a => a.Status == "Admitted" || a.Status == "AwaitingBed")
             .Include(a => a.Bed)
             .OrderByDescending(a => a.AdmissionDate)
             .ToListAsync();
@@ -28,5 +28,5 @@ public class AdmissionRepository : IAdmissionRepository
     public async Task UpdateAsync(Admission a)
         { _db.Admissions.Update(a); await _db.SaveChangesAsync(); }
     public async Task<bool> IsPatientAdmittedAsync(int patientId)
-        => await _db.Admissions.AnyAsync(a => a.PatientId == patientId && a.Status == "Admitted");
+        => await _db.Admissions.AnyAsync(a => a.PatientId == patientId && (a.Status == "Admitted" || a.Status == "AwaitingBed"));
 }

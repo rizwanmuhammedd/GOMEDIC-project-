@@ -56,16 +56,28 @@ export const PharmacistDashboard = () => {
         } finally { setLoading(false); }
     };
 
-    useEffect(() => { loadData(); }, [location.pathname]);
+    useEffect(() => { loadData(); }, []);
 
     const handleDispense = async (id: number) => {
-        try {
-            await prescriptionApi.dispense(id);
-            addToast({ type: 'success', title: 'Dispensed', message: 'Medicine stock updated' });
-            loadData();
-        } catch (err: any) {
-            addToast({ type: 'error', title: 'Failed', message: err.response?.data?.message || 'Error dispensing' });
-        }
+        const p = prescriptions.find(x => x.id === id);
+        const hasStockOut = p?.items?.some((it: any) => it.isOutOfStock);
+
+        addToast({
+            type: 'warning',
+            title: hasStockOut ? 'Partial Dispense?' : 'Dispense Medication?',
+            message: hasStockOut 
+                ? `This prescription has out-of-stock items. We will only dispense available stock and finalize the order. Continue?`
+                : 'Are you sure you want to dispense this prescription? This will deduct from current stock.',
+            onConfirm: async () => {
+                try {
+                    await prescriptionApi.dispense(id);
+                    addToast({ type: 'success', title: 'Dispensed', message: hasStockOut ? 'Available items dispensed. Prescription finalized.' : 'Medicine stock updated' });
+                    loadData();
+                } catch (err: any) {
+                    addToast({ type: 'error', title: 'Failed', message: err.response?.data?.message || 'Error dispensing' });
+                }
+            }
+        });
     };
 
     const handleAddMedicine = async (e: React.FormEvent) => {
@@ -345,7 +357,7 @@ export const PharmacistDashboard = () => {
                             <div className="w-7 h-7 rounded-full bg-zinc-100 flex items-center justify-center text-[10px] font-bold text-zinc-600">P</div>
                             <div>
                                 <p className="text-[13px] font-bold text-zinc-900 leading-tight">{p.patientName}</p>
-                                <p className="text-[10px] text-zinc-500 font-medium">ID #{p.patientId}</p>
+                                <p className="text-[10px] text-zinc-500 font-medium">ID #{p.patientId} &bull; {p.patientPhone || 'No Phone'}</p>
                             </div>
                         </div>
                     </div>
@@ -518,8 +530,8 @@ export const PharmacistDashboard = () => {
                                 <p className="text-[13px] font-bold tracking-tight text-zinc-900">{(selectedPrescription.doctorName || '').toLowerCase().startsWith('dr.') ? selectedPrescription.doctorName : `Dr. ${selectedPrescription.doctorName || 'Assigned'}`}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest mb-0.5">Patient Reg</p>
-                                <p className="text-[13px] font-bold tracking-tight text-zinc-900">#{selectedPrescription.patientId}</p>
+                                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest mb-0.5">Patient Info</p>
+                                <p className="text-[13px] font-bold tracking-tight text-zinc-900">#{selectedPrescription.patientId} &bull; {selectedPrescription.patientPhone || 'No Phone'}</p>
                             </div>
                             <Badge variant="warning">{selectedPrescription.status}</Badge>
                         </div>
@@ -528,9 +540,12 @@ export const PharmacistDashboard = () => {
                             <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">Required Dispensation Items</p>
                             <div className="space-y-2">
                                 {selectedPrescription.items?.map((it: any, i: number) => (
-                                    <div key={i} className="flex items-center justify-between p-3 bg-[#FDFDFD] border border-zinc-100 rounded-[12px]">
+                                    <div key={i} className={`flex items-center justify-between p-3 rounded-[12px] border ${it.isOutOfStock ? 'bg-red-50/50 border-red-100 opacity-80' : 'bg-[#FDFDFD] border-zinc-100'}`}>
                                         <div>
-                                            <p className="text-[13px] font-semibold text-zinc-900">{it.medicineName}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-[13px] font-semibold text-zinc-900">{it.medicineName}</p>
+                                                {it.isOutOfStock && <Badge variant="error" className="text-[8px] px-1 py-0">STOCK OUT</Badge>}
+                                            </div>
                                             <p className="text-[11px] text-zinc-500 font-medium">{it.dosage} &bull; {it.frequency}</p>
                                         </div>
                                         <div className="text-right">

@@ -16,7 +16,9 @@ public interface IAuthService
     Task ResetPasswordAsync(ResetPasswordDto dto);
     Task ChangePasswordAsync(int userId, ChangePasswordDto dto);
     Task UpdateProfileImageAsync(int userId, string imageUrl);
+    Task UpdateProfileAsync(int userId, UpdateProfileDto dto);
     Task DeactivateUserAsync(int userId);
     Task RestoreUserAsync(int userId);
+    Task<User?> GetUserByIdAsync(int userId);
     Task<AuthResponseDto> LoginWithGoogleAsync(GoogleLoginRequestDto dto);
 }

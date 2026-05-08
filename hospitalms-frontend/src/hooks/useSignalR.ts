@@ -65,6 +65,7 @@ export interface SignalREvent {
 export const useSignalR = (events: SignalREvent[], enabled = true) => {
   const connectionRef = useRef<signalR.HubConnection | null>(null);
   const eventsRef = useRef(events);
+  const isConnectingRef = useRef(false);
 
   // Update eventsRef when events change
   useEffect(() => {
@@ -73,8 +74,9 @@ export const useSignalR = (events: SignalREvent[], enabled = true) => {
 
   const connect = useCallback(async () => {
     const token = localStorage.getItem('hms_token');
-    if (!token || !enabled || connectionRef.current) return;
+    if (!token || !enabled || connectionRef.current || isConnectingRef.current) return;
 
+    isConnectingRef.current = true;
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(HUB_URL, {
         accessTokenFactory: () => token,
@@ -87,6 +89,8 @@ export const useSignalR = (events: SignalREvent[], enabled = true) => {
 
     // Bind events using a proxy handler that always uses the latest eventsRef
     eventsRef.current.forEach(({ event }) => {
+      // Clear any existing listeners for this event to prevent duplicates
+      connection.off(event);
       connection.on(event, (...args: any[]) => {
         const currentEvent = eventsRef.current.find(e => e.event === event);
         if (currentEvent) currentEvent.handler(...args);
@@ -99,7 +103,12 @@ export const useSignalR = (events: SignalREvent[], enabled = true) => {
       connectionRef.current = connection;
     } catch (err) {
       console.warn('SignalR connection failed:', err);
-      setTimeout(() => connect(), 5000);
+      setTimeout(() => {
+        isConnectingRef.current = false;
+        connect();
+      }, 5000);
+    } finally {
+      isConnectingRef.current = false;
     }
   }, [enabled]);
 

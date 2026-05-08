@@ -34,18 +34,34 @@ public class ChatRepository : IChatRepository
 
     public async Task<IEnumerable<object>> GetUniquePatientsWithStatsAsync()
     {
-        var stats = await _db.ChatMessages
+        // 1. Get stats using basic projection to ensure SQL translation
+        var rawStats = await _db.ChatMessages
             .GroupBy(m => m.PatientId)
             .Select(g => new {
                 PatientId = g.Key,
-                PatientName = g.Where(x => x.PatientName != null).Select(x => x.PatientName).FirstOrDefault(),
+                PatientName = g.Max(x => x.PatientName), // Take any available name
                 LatestMessage = g.Max(x => x.Timestamp),
                 UnreadCount = g.Count(x => x.IsFromPatient && !x.IsRead)
             })
-            .OrderByDescending(x => x.LatestMessage)
             .ToListAsync();
 
-        return stats;
+        // 2. Get blocked users separately
+        var sevenDaysAgo = System.DateTime.UtcNow.AddDays(-7);
+        var blockedPatientIds = await _db.BlockedChatUsers
+            .Where(x => x.BlockedAt > sevenDaysAgo)
+            .Select(x => x.PatientId)
+            .ToListAsync();
+
+        // 3. Combine in-memory
+        return rawStats
+            .OrderByDescending(x => x.LatestMessage)
+            .Select(s => new {
+                s.PatientId,
+                s.PatientName,
+                s.LatestMessage,
+                s.UnreadCount,
+                IsBlocked = blockedPatientIds.Contains(s.PatientId)
+            });
     }
 
     public async Task MarkAsReadAsync(string patientId)
@@ -62,5 +78,64 @@ public class ChatRepository : IChatRepository
             }
             await _db.SaveChangesAsync();
         }
+    }
+
+    public async Task BlockUserAsync(string patientId, string? patientName, string? reason)
+    {
+        var alreadyBlocked = await _db.BlockedChatUsers.AnyAsync(x => x.PatientId == patientId);
+        if (alreadyBlocked) return;
+
+        _db.BlockedChatUsers.Add(new BlockedChatUser
+        {
+            PatientId = patientId,
+            PatientName = patientName,
+            Reason = reason,
+            BlockedAt = System.DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task UnblockUserAsync(string patientId)
+    {
+        var blocked = await _db.BlockedChatUsers.Where(x => x.PatientId == patientId).ToListAsync();
+        if (blocked.Any())
+        {
+            _db.BlockedChatUsers.RemoveRange(blocked);
+            await _db.SaveChangesAsync();
+        }
+    }
+
+    public async Task<bool> IsUserBlockedAsync(string patientId)
+    {
+        var block = await _db.BlockedChatUsers
+            .Where(x => x.PatientId == patientId)
+            .OrderByDescending(x => x.BlockedAt)
+            .FirstOrDefaultAsync();
+
+        if (block == null) return false;
+
+        // Auto-unblock after 7 days
+        if (System.DateTime.UtcNow > block.BlockedAt.AddDays(7))
+        {
+            _db.BlockedChatUsers.Remove(block);
+            await _db.SaveChangesAsync();
+            return false;
+        }
+
+        return true;
+    }
+
+    public async Task<int> GetDailyMessageCountAsync(string patientId)
+    {
+        var today = System.DateTime.UtcNow.Date;
+        return await _db.ChatMessages
+            .CountAsync(m => m.PatientId == patientId && m.IsFromPatient && m.Timestamp >= today);
+    }
+
+    public async Task<int> GetRecentMessageCountAsync(string patientId, int minutes)
+    {
+        var since = System.DateTime.UtcNow.AddMinutes(-minutes);
+        return await _db.ChatMessages
+            .CountAsync(m => m.PatientId == patientId && m.IsFromPatient && m.Timestamp >= since);
     }
 }

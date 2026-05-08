@@ -98,6 +98,14 @@ public class DoctorsController : ControllerBase
         return Ok(created);
     }
 
+    [HttpPut("schedules/{scheduleId:int}")]
+    [Authorize(Roles = "Doctor,Admin")]
+    public async Task<IActionResult> UpdateSchedule(int scheduleId, [FromBody] CreateDoctorScheduleDto dto)
+    {
+        await _doctorService.UpdateScheduleAsync(scheduleId, dto);
+        return NoContent();
+    }
+
     [HttpDelete("schedules/{scheduleId:int}")]
     [Authorize(Roles = "Doctor,Admin")]
     public async Task<IActionResult> DeleteSchedule(int scheduleId)
@@ -133,8 +141,24 @@ public class DoctorsController : ControllerBase
         return Ok(new { imageUrl = dto.ImageUrl });
     }
 
+    [HttpPatch("slot-duration")]
+    [Authorize(Roles = "Doctor")]
+    public async Task<IActionResult> UpdateSlotDuration([FromBody] UpdateSlotDurationDto dto)
+    {
+        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+        
+        await _doctorService.UpdateSlotDurationAsync(int.Parse(userIdStr), dto.Duration);
+        return Ok(new { message = "Slot duration updated successfully" });
+    }
+
     public class UpdateProfilePictureDto
     {
         public string ImageUrl { get; set; } = string.Empty;
+    }
+
+    public class UpdateSlotDurationDto
+    {
+        public int Duration { get; set; }
     }
 }

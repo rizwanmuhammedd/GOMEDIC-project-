@@ -41,14 +41,14 @@ export const Modal: React.FC<any> = ({ isOpen, onClose, title, children, size = 
   if (!isOpen) return null;
   const sizes = { sm: 'max-w-[400px]', md: 'max-w-[500px]', lg: 'max-w-[640px]', xl: 'max-w-[800px]' };
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-emerald-500/40 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative w-full ${(sizes as any)[size]} bg-[#FDFDFD] rounded-[24px] shadow-[0_32px_80px_rgba(0,0,0,0.08)] border border-zinc-200 animate-in zoom-in-95 duration-200`}>
-        <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-100">
-          <h2 className="text-[17px] font-semibold tracking-tight text-zinc-900">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 transition-colors flex items-center justify-center"><X strokeWidth={2} className="w-4 h-4" /></button>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-zinc-900/60 backdrop-blur-[2px]" onClick={onClose} />
+      <div className={`relative w-full ${(sizes as any)[size]} bg-[#FDFDFD] rounded-[32px] shadow-[0_32px_120px_rgba(0,0,0,0.15)] border border-zinc-200/50 animate-in zoom-in-95 duration-300 overflow-hidden`}>
+        <div className="flex items-center justify-between px-8 py-6 border-b border-zinc-100/80">
+          <h2 className="text-[19px] font-bold tracking-tight text-zinc-900">{title}</h2>
+          <button onClick={onClose} className="w-9 h-9 rounded-full bg-zinc-50 hover:bg-zinc-100 text-zinc-400 hover:text-zinc-900 transition-all border border-zinc-100 flex items-center justify-center"><X strokeWidth={2.5} className="w-4 h-4" /></button>
         </div>
-        <div className="px-6 py-6 max-h-[85vh] overflow-y-auto custom-scrollbar">{children}</div>
+        <div className="px-8 py-8 max-h-[80vh] overflow-y-auto custom-scrollbar">{children}</div>
       </div>
     </div>
   );

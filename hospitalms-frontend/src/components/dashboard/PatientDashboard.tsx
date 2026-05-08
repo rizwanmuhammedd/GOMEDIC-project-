@@ -3,11 +3,12 @@ import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader, Card, EmptyState, Badge, LoadingSpinner, Button, statusBadge, Modal, Input, Select } from '../ui';
 import {
     Calendar, Pill, FlaskConical, Receipt, User, Stethoscope,
-    LayoutGrid, HeartPulse, Brain, Bone, Baby, Activity, X, ChevronRight, FileText, Plus, Clock, ArrowLeft, ArrowRight, Loader2
+    LayoutGrid, HeartPulse, Brain, Bone, Baby, Activity, X, ChevronRight, FileText, Plus, Clock, ArrowLeft, ArrowRight, Loader2, CheckCircle2, Sparkles
 } from 'lucide-react';
 import api, { appointmentApi, prescriptionApi, billApi, labApi, medicineApi, doctorApi } from '../../api/axiosInstance';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { AIChat } from '../chat/AIChat';
 
 const DEPT_ICONS: Record<string, React.ReactNode> = {
     'General Medicine': <HeartPulse strokeWidth={1.5} className="w-5 h-5" />,
@@ -28,6 +29,7 @@ export const PatientDashboard = () => {
     const [prescriptions, setPrescriptions] = useState<any[]>([]);
     const [bills, setBills] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [aiChatOpen, setAIChatOpen] = useState(false);
     const [selectedDept, setSelectedDept] = useState<number | null>(null);
     const [selectedPrescription, setSelectedPrescription] = useState<any | null>(null);
     const recordsRef = React.useRef<HTMLDivElement>(null);
@@ -167,6 +169,61 @@ export const PatientDashboard = () => {
         setChiefComplaint('');
     };
 
+    const handlePayBillOnline = async (b: any) => {
+        try {
+            setLoading(true);
+            addToast({ type: 'info', title: 'Connecting to Gateway', message: 'Initializing secure transaction...' });
+            
+            // 1. Create order
+            const orderRes = await api.post(`/api/bills/${b.id}/create-razorpay-order`);
+            const { orderId, amount, currency, keyId } = orderRes.data;
+
+            // 2. Razorpay Options
+            const options = {
+                key: keyId,
+                amount: amount * 100,
+                currency: currency,
+                name: "GOMEDIC Hospital",
+                description: `Hospital Ledger Payment - ${b.billNumber}`,
+                order_id: orderId,
+                handler: async function (response: any) {
+                    try {
+                        addToast({ type: 'info', title: 'Finalizing', message: 'Verifying transaction with bank...' });
+                        
+                        await api.post('/api/bills/verify-razorpay-payment', {
+                            razorpayOrderId: response.razorpay_order_id,
+                            razorpayPaymentId: response.razorpay_payment_id,
+                            razorpaySignature: response.razorpay_signature,
+                            prescriptionId: b.id, // Using shared field for BillId
+                            isMedicine: false
+                        });
+
+                        addToast({ type: 'success', title: 'Payment Secured', message: 'Transaction verified. Your ledger is now cleared.' });
+                        
+                        // Refresh bills
+                        const res = await billApi.getByPatient(user?.id || 0);
+                        setBills(res.data);
+                    } catch (err: any) {
+                        addToast({ type: 'error', title: 'Verification Failed', message: 'Contact support with transaction ID: ' + response.razorpay_payment_id });
+                    }
+                },
+                prefill: {
+                    name: user?.fullName,
+                    contact: user?.phone
+                },
+                theme: { color: "#111827" }
+            };
+
+            const rzp = new (window as any).Razorpay(options);
+            rzp.on('payment.failed', (res: any) => addToast({ type: 'error', title: 'Payment Aborted', message: res.error.description }));
+            rzp.open();
+        } catch (err: any) {
+            addToast({ type: 'error', title: 'Payment Error', message: 'Could not initiate gateway.' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handlePayForPrescription = async (p: any, isMedicine: boolean = false) => {
         try {
             addToast({ type: 'info', title: 'Preparing Payment', message: `Initializing ${isMedicine ? 'Medicine' : 'Consultation'} fee...` });
@@ -250,14 +307,14 @@ export const PatientDashboard = () => {
         if (!printWindow) return;
         
         const itemsHtml = p.items?.map((it: any) => `
-            <tr>
+            <tr style="${it.isOutOfStock ? 'background: #fffafa;' : ''}">
                 <td style="padding: 12px; border-bottom: 1px solid #eee;">
-                    <div style="font-weight: bold; color: #111;">${it.medicineName}</div>
+                    <div style="font-weight: bold; color: ${it.isOutOfStock ? '#ef4444' : '#111'};">${it.medicineName} ${it.isOutOfStock ? '<span style="font-size: 8px; border: 1px solid #ef4444; padding: 1px 4px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Not Available</span>' : ''}</div>
                     <div style="font-size: 11px; color: #666;">${it.instructions || ''}</div>
                 </td>
-                <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center;">${it.dosage}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center;">${it.frequency}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center;">${it.durationDays} Days</td>
+                <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center; color: ${it.isOutOfStock ? '#ccc' : 'inherit'};">${it.dosage}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center; color: ${it.isOutOfStock ? '#ccc' : 'inherit'};">${it.frequency}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center; color: ${it.isOutOfStock ? '#ccc' : 'inherit'};">${it.durationDays} Days</td>
             </tr>
         `).join('');
 
@@ -423,21 +480,32 @@ export const PatientDashboard = () => {
 
     useEffect(() => {
         const fetchData = async () => {
+            const safeFetch = async (apiCall: any, fallback: any = []) => {
+                try {
+                    const res = await apiCall;
+                    return res.data;
+                } catch (err) {
+                    console.warn("Individual fetch failed:", err);
+                    return fallback;
+                }
+            };
+
             try {
-                const [docRes, deptRes, apptRes, prescRes, billRes] = await Promise.all([
-                    doctorApi.getAll(),
-                    api.get('/api/departments'),
-                    appointmentApi.getMy(),
-                    prescriptionApi.getByPatient(user?.id || 0),
-                    billApi.getByPatient(user?.id || 0)
+                const [docs, depts, appts, prescs, bls] = await Promise.all([
+                    safeFetch(doctorApi.getAll()),
+                    safeFetch(api.get('/api/departments')),
+                    safeFetch(appointmentApi.getMy()),
+                    safeFetch(prescriptionApi.getByPatient(user?.id || 0)),
+                    safeFetch(billApi.getByPatient(user?.id || 0))
                 ]);
-                setDoctors(docRes.data);
-                setDepartments(deptRes.data);
-                setAppointments(apptRes.data);
-                setPrescriptions(prescRes.data);
-                setBills(billRes.data);
+                
+                setDoctors(docs);
+                setDepartments(depts);
+                setAppointments(appts);
+                setPrescriptions(prescs);
+                setBills(bls);
             } catch (e) {
-                console.error("Failed to load patient data", e);
+                console.error("Critical error loading patient dashboard data:", e);
             } finally {
                 setLoading(false);
             }
@@ -488,6 +556,43 @@ export const PatientDashboard = () => {
                 <div className="space-y-8">
                     <PageHeader title="Bills & Payments" subtitle="Track your medical expenses and payment status" />
                     
+                    {/* Section: Pending Consultation Payments */}
+                    <Card title="Direct Online Settlements">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                            {bills.filter(b => b.paymentStatus !== 'Paid').length === 0 ? (
+                                <div className="col-span-full py-12 text-center text-zinc-400 text-[13px] italic border-2 border-dashed border-zinc-100 rounded-[32px]">
+                                    No outstanding hospital dues detected.
+                                </div>
+                            ) : (
+                                bills.filter(b => b.paymentStatus !== 'Paid').map(b => (
+                                    <div key={b.id} className="relative overflow-hidden bg-zinc-900 rounded-[28px] p-6 text-white shadow-xl shadow-zinc-200/50 group">
+                                        <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-500">
+                                            <Receipt className="w-24 h-24" />
+                                        </div>
+                                        <div className="relative z-10">
+                                            <div className="flex justify-between items-center mb-6">
+                                                <Badge variant="warning" className="bg-amber-400 text-amber-950 border-none font-black text-[10px]">Awaiting Payment</Badge>
+                                                <p className="text-[11px] font-bold opacity-40 uppercase tracking-widest">{b.billNumber}</p>
+                                            </div>
+                                            <p className="text-[13px] opacity-60 font-medium mb-1">Total Outstanding</p>
+                                            <h3 className="text-3xl font-black tracking-tight mb-8">₹{b.balanceAmount}</h3>
+                                            
+                                            <div className="space-y-3">
+                                                <Button 
+                                                    className="w-full h-12 bg-white text-zinc-900 hover:bg-zinc-100 font-bold border-none" 
+                                                    onClick={() => handlePayBillOnline(b)}
+                                                >
+                                                    Secure Payment
+                                                </Button>
+                                                <p className="text-center text-[10px] opacity-40 font-medium">Encrypted & Secure Peer-to-Peer Transaction</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </Card>
+
                     {/* Section: Pending Medicine Payments */}
                     <Card title="Pending Medicine Payments">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -580,6 +685,28 @@ export const PatientDashboard = () => {
                 <div className="space-y-10">
                     <PageHeader title="Patient Dashboard" subtitle="Manage your health and connect with specialists" />
                     
+                    {/* AI ASSISTANT PROMO */}
+                    <div className="relative overflow-hidden bg-gradient-to-r from-emerald-600 to-teal-700 rounded-[32px] p-8 text-white shadow-xl group">
+                        <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                            <Sparkles className="w-48 h-48" />
+                        </div>
+                        <div className="relative z-10 max-w-2xl">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md border border-white/30 text-[10px] font-black uppercase tracking-widest mb-4">
+                                <Sparkles className="w-3 h-3" /> New Platform Feature
+                            </div>
+                            <h2 className="text-3xl font-black tracking-tight mb-3">AI Medical Assistant</h2>
+                            <p className="text-emerald-50 text-[15px] font-medium leading-relaxed mb-8 opacity-90">
+                                Get instant answers to your medical questions, symptom analysis, and wellness guidance powered by our advanced clinical logic engine.
+                            </p>
+                            <button 
+                                onClick={() => setAIChatOpen(true)}
+                                className="bg-white text-emerald-700 px-8 py-3.5 rounded-2xl text-[14px] font-black transition-all hover:shadow-[0_0_30px_rgba(255,255,255,0.4)] active:scale-95"
+                            >
+                                Start Smart Consultation
+                            </button>
+                        </div>
+                    </div>
+
                     {/* DEPARTMENTS */}
                     <section className="space-y-5">
                         <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
@@ -629,131 +756,279 @@ export const PatientDashboard = () => {
                 title="Schedule an Appointment"
                 size="md"
             >
-                <div className="space-y-6">
+                <div className="space-y-8">
                     {/* Progress Bar */}
-                    <div className="flex gap-2">
+                    <div className="flex items-center px-2">
                         {steps.map((s, i) => (
-                            <div key={s} className="flex-1">
-                                <div className={`h-1 rounded-full mb-1.5 transition-colors duration-300 ${i < bookingStep ? 'bg-emerald-500' : 'bg-zinc-200'}`} />
-                                <span className={`text-[10px] font-semibold uppercase tracking-wider ${i < bookingStep ? 'text-zinc-900' : 'text-zinc-400'}`}>{s}</span>
-                            </div>
+                            <React.Fragment key={s}>
+                                <div className="flex flex-col items-center gap-2 relative z-10">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold transition-all duration-300 ${i + 1 <= bookingStep ? 'bg-emerald-500 text-white ring-4 ring-emerald-50' : 'bg-zinc-100 text-zinc-400'}`}>
+                                        {i + 1 < bookingStep ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
+                                    </div>
+                                    <span className={`text-[10px] font-bold uppercase tracking-wider absolute -bottom-5 whitespace-nowrap ${i + 1 <= bookingStep ? 'text-zinc-900' : 'text-zinc-400'}`}>{s}</span>
+                                </div>
+                                {i < steps.length - 1 && (
+                                    <div className={`flex-1 h-0.5 mx-2 transition-colors duration-300 ${i + 1 < bookingStep ? 'bg-emerald-500' : 'bg-zinc-100'}`} />
+                                )}
+                            </React.Fragment>
                         ))}
                     </div>
 
-                    {/* Step 1: Department */}
-                    {bookingStep === 1 && (
-                        <div className="animate-in slide-in-from-right-2 fade-in duration-200">
-                            <h3 className="text-[15px] font-semibold text-zinc-900 mb-5">Select Department</h3>
-                            <div className="grid grid-cols-2 gap-3 mb-6">
-                                {departments.map(d => (
-                                    <button key={d.id} onClick={() => { setBookingDeptId(d.id); setBookingStep(2); }}
-                                        className="p-4 rounded-xl border border-zinc-200 bg-white hover:border-emerald-500 hover:bg-emerald-50 transition-all text-left">
-                                        <span className="text-[13px] font-bold text-zinc-800">{d.name}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Step 2: Doctor */}
-                    {bookingStep === 2 && (
-                        <div className="animate-in slide-in-from-right-2 fade-in duration-200">
-                            <button onClick={() => setBookingStep(1)} className="flex items-center gap-1 text-zinc-500 hover:text-zinc-900 text-[12px] font-bold mb-4"><ArrowLeft className="w-3 h-3" /> Back</button>
-                            <h3 className="text-[15px] font-semibold text-zinc-900 mb-5">Select Specialist</h3>
-                            {deptDocsLoading ? <LoadingSpinner size="sm" /> : (
-                                <div className="space-y-2 mb-6">
-                                    {deptDoctors.map(doc => (
-                                        <button key={doc.id} onClick={() => { setBookingDoc(doc); setBookingDate(new Date().toISOString().split('T')[0]); setBookingStep(3); }}
-                                            className="w-full p-4 rounded-xl border border-zinc-200 bg-white hover:border-emerald-500 hover:bg-emerald-50 transition-all flex items-center justify-between text-left">
-                                            <div>
-                                                <p className="text-[13px] font-bold text-zinc-900">{doc.fullName}</p>
-                                                <p className="text-[11px] text-zinc-500">{doc.specialization}</p>
+                    <div className="pt-4">
+                        {/* Step 1: Department */}
+                        {bookingStep === 1 && (
+                            <div className="animate-in slide-in-from-right-2 fade-in duration-300">
+                                <div className="mb-6">
+                                    <h3 className="text-[17px] font-bold text-zinc-900">Select Department</h3>
+                                    <p className="text-[13px] text-zinc-500">Choose the clinical department for your visit</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 mb-2">
+                                    {departments.map(d => (
+                                        <button key={d.id} onClick={() => { setBookingDeptId(d.id); setBookingStep(2); }}
+                                            className="p-4 rounded-[20px] border border-zinc-200 bg-white hover:border-emerald-500 hover:bg-emerald-50 hover:shadow-md transition-all text-center group">
+                                            <div className="w-10 h-10 rounded-xl bg-zinc-50 flex items-center justify-center mx-auto mb-3 text-zinc-500 group-hover:bg-white group-hover:text-emerald-600 transition-colors">
+                                                {DEPT_ICONS[d.name] || <Stethoscope className="w-5 h-5" />}
                                             </div>
-                                            <span className="text-[13px] font-bold text-emerald-600">₹{doc.consultationFee}</span>
+                                            <span className="text-[14px] font-bold text-zinc-800 block">{d.name}</span>
                                         </button>
                                     ))}
                                 </div>
-                            )}
-                        </div>
-                    )}
+                            </div>
+                        )}
 
-                    {/* Step 3: Date & Time */}
-                    {bookingStep === 3 && bookingDoc && (
-                        <div className="animate-in slide-in-from-right-2 fade-in duration-200">
-                            {!bookParam && <button onClick={() => setBookingStep(2)} className="flex items-center gap-1 text-zinc-500 hover:text-zinc-900 text-[12px] font-bold mb-4"><ArrowLeft className="w-3 h-3" /> Back</button>}
-                            <h3 className="text-[15px] font-semibold text-zinc-900 mb-5">Choose Schedule: {bookingDoc.fullName}</h3>
-                            
-                            <div className="space-y-5">
-                                <Input label="Select Date" type="date" required value={bookingDate} onChange={(e: any) => setBookingDate(e.target.value)} min={new Date().toISOString().split('T')[0]} />
-                                
-                                <div className="space-y-2">
-                                    <label className="text-[12px] font-medium text-zinc-700 block mb-1">Available Slots</label>
-                                    {slotsLoading ? <LoadingSpinner size="sm" /> : (
-                                        <div className="grid grid-cols-4 gap-2">
-                                            {availableSlots.map(slotStr => {
-                                                const isBooked = slotStr.endsWith('::booked');
-                                                const slot = isBooked ? slotStr.replace('::booked', '') : slotStr;
-                                                return (
-                                                    <button key={slotStr} type="button" disabled={isBooked} onClick={() => setSelectedSlot(slot)}
-                                                        className={`py-2 px-1 rounded-lg border text-[11px] font-bold transition-all ${isBooked ? 'bg-zinc-50 text-zinc-300' : selectedSlot === slot ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white text-zinc-700 hover:border-zinc-400'}`}>
-                                                        {slot}
-                                                    </button>
-                                                );
-                                            })}
-                                            {availableSlots.length === 0 && <p className="col-span-4 text-center text-[12px] text-zinc-400 italic py-4">No slots available for this date.</p>}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
+                        {/* Step 2: Doctor */}
+                        {bookingStep === 2 && (
+                            <div className="animate-in slide-in-from-right-2 fade-in duration-300">
+                                <div className="flex items-center justify-between mb-6">
                                     <div>
-                                        <label className="text-[12px] font-medium text-zinc-700 block mb-1.5">Patient Age</label>
-                                        <input 
-                                            type="number" 
-                                            value={patientAge} 
-                                            onChange={e => setPatientAge(e.target.value)} 
-                                            placeholder="Age"
-                                            readOnly={!!user?.dateOfBirth}
-                                            className={`w-full px-3.5 py-2.5 border border-zinc-200 rounded-lg text-[14px] placeholder-zinc-400 focus:outline-none focus:border-zinc-400 focus:ring-4 focus:ring-zinc-100 transition-all shadow-sm ${user?.dateOfBirth ? 'bg-zinc-50 text-zinc-500 cursor-not-allowed' : 'bg-white text-zinc-900'}`}
-                                        />
+                                        <h3 className="text-[17px] font-bold text-zinc-900">Choose Specialist</h3>
+                                        <p className="text-[13px] text-zinc-500">Select a doctor from our {departments.find(d => d.id === bookingDeptId)?.name} team</p>
                                     </div>
-                                    <Input label="Chief Complaint" required value={chiefComplaint} onChange={(e: any) => setChiefComplaint(e.target.value)} placeholder="e.g. Fever" />
+                                    <button onClick={() => setBookingStep(1)} className="p-2 rounded-full hover:bg-zinc-100 text-zinc-400 transition-colors"><ArrowLeft className="w-4 h-4" /></button>
+                                </div>
+                                
+                                {deptDocsLoading ? <LoadingSpinner message="Finding specialists..." /> : (
+                                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                        {deptDoctors.map(doc => (
+                                            <button key={doc.id} onClick={() => { setBookingDoc(doc); setBookingDate(new Date().toISOString().split('T')[0]); setBookingStep(3); }}
+                                                className="w-full p-4 rounded-[20px] border border-zinc-200 bg-white hover:border-emerald-500 hover:bg-emerald-50 hover:shadow-md transition-all flex items-center gap-4 text-left group">
+                                                <div className="w-12 h-12 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center text-zinc-400 group-hover:bg-white transition-colors">
+                                                    {doc.profileImageUrl ? <img src={doc.profileImageUrl} alt="" className="w-full h-full object-cover rounded-xl" /> : <User className="w-6 h-6" />}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-[14px] font-bold text-zinc-900">{(doc.fullName || '').toLowerCase().startsWith('dr.') ? doc.fullName : `Dr. ${doc.fullName}`}</p>
+                                                    <p className="text-[12px] text-zinc-500">{doc.specialization}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[14px] font-bold text-emerald-600">₹{doc.consultationFee}</p>
+                                                    <p className="text-[10px] font-medium text-zinc-400 uppercase">Per Visit</p>
+                                                </div>
+                                            </button>
+                                        ))}
+                                        {deptDoctors.length === 0 && <EmptyState icon={<User className="w-8 h-8" />} title="No doctors available" description="Try selecting a different department." />}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Step 3: Date & Time */}
+                        {bookingStep === 3 && bookingDoc && (
+                            <div className="animate-in slide-in-from-right-2 fade-in duration-300">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div>
+                                        <h3 className="text-[17px] font-bold text-zinc-900">Appointment Schedule</h3>
+                                        <p className="text-[13px] text-zinc-500">Pick a convenient time for your consultation</p>
+                                    </div>
+                                    {!bookParam && <button onClick={() => setBookingStep(2)} className="p-2 rounded-full hover:bg-zinc-100 text-zinc-400 transition-colors"><ArrowLeft className="w-4 h-4" /></button>}
+                                </div>
+                                
+                                <div className="space-y-6">
+                                    <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100/50 flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-xl bg-white border border-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm">
+                                            <User strokeWidth={2} className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[13px] font-bold text-emerald-900">{(bookingDoc.fullName || '').toLowerCase().startsWith('dr.') ? bookingDoc.fullName : `Dr. ${bookingDoc.fullName}`}</p>
+                                            <p className="text-[11px] text-emerald-700 font-medium opacity-80">{bookingDoc.specialization}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <Input label="Visit Date" type="date" required value={bookingDate} onChange={(e: any) => setBookingDate(e.target.value)} min={new Date().toISOString().split('T')[0]} />
+                                        <div>
+                                            <label className="text-[12px] font-medium text-zinc-700 ml-0.5">Patient Age</label>
+                                            <input 
+                                                type="number" 
+                                                value={patientAge} 
+                                                onChange={e => setPatientAge(e.target.value)} 
+                                                placeholder="Age"
+                                                readOnly={!!user?.dateOfBirth}
+                                                className={`w-full px-3.5 py-2.5 mt-1.5 border border-zinc-200 rounded-lg text-[13px] placeholder-zinc-400 focus:outline-none focus:border-zinc-400 focus:ring-4 focus:ring-zinc-100 transition-all ${user?.dateOfBirth ? 'bg-zinc-50 text-zinc-500 cursor-not-allowed' : 'bg-white text-zinc-900'}`}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <label className="text-[12px] font-medium text-zinc-700 ml-0.5">Select Time Slot</label>
+                                        {slotsLoading ? <LoadingSpinner size="sm" /> : (
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {availableSlots.map(slotStr => {
+                                                    const isBooked = slotStr.endsWith('::booked');
+                                                    const slot = isBooked ? slotStr.replace('::booked', '') : slotStr;
+                                                    return (
+                                                        <button key={slotStr} type="button" disabled={isBooked} onClick={() => setSelectedSlot(slot)}
+                                                            className={`py-2.5 rounded-xl border text-[11px] font-bold transition-all ${isBooked ? 'bg-zinc-50 text-zinc-300 border-zinc-100 cursor-not-allowed' : selectedSlot === slot ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-200' : 'bg-white text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50'}`}>
+                                                            {slot}
+                                                        </button>
+                                                    );
+                                                })}
+                                                {availableSlots.length === 0 && <div className="col-span-4 p-4 text-center bg-zinc-50 rounded-xl border border-dashed border-zinc-200 text-zinc-400 text-[12px] italic">No slots available for this date.</div>}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <Input label="Chief Complaint" required value={chiefComplaint} onChange={(e: any) => setChiefComplaint(e.target.value)} placeholder="Briefly describe your health concern..." />
+                                </div>
+
+                                <Button onClick={() => setBookingStep(4)} disabled={!selectedSlot || !bookingDate || !chiefComplaint || !patientAge} className="w-full mt-10 h-12 shadow-lg shadow-emerald-500/10">Continue to Review</Button>
+                            </div>
+                        )}
+
+                        {/* Step 4: Finalize */}
+                        {bookingStep === 4 && bookingDoc && (
+                            <div className="animate-in slide-in-from-right-2 fade-in duration-300">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className="text-[17px] font-bold text-zinc-900">Review Appointment</h3>
+                                    <button onClick={() => setBookingStep(3)} className="p-2 rounded-full hover:bg-zinc-100 text-zinc-400 transition-colors"><ArrowLeft className="w-4 h-4" /></button>
+                                </div>
+                                
+                                <div className="relative overflow-hidden bg-white border border-zinc-200 rounded-[24px] shadow-sm">
+                                    {/* Decorative "Ticket" elements */}
+                                    <div className="absolute top-1/2 -left-3 w-6 h-6 bg-zinc-50 rounded-full border border-zinc-200 -translate-y-1/2" />
+                                    <div className="absolute top-1/2 -right-3 w-6 h-6 bg-zinc-50 rounded-full border border-zinc-200 -translate-y-1/2" />
+                                    
+                                    <div className="p-6 border-b border-dashed border-zinc-200">
+                                        <div className="flex items-center gap-4 mb-6">
+                                            <div className="w-14 h-14 rounded-2xl bg-zinc-100 flex items-center justify-center text-zinc-500 overflow-hidden">
+                                                {bookingDoc.profileImageUrl ? <img src={bookingDoc.profileImageUrl} alt="" className="w-full h-full object-cover" /> : <User className="w-7 h-7" />}
+                                            </div>
+                                            <div>
+                                                <p className="text-[15px] font-bold text-zinc-900">{(bookingDoc.fullName || '').toLowerCase().startsWith('dr.') ? bookingDoc.fullName : `Dr. ${bookingDoc.fullName}`}</p>
+                                                <p className="text-[12px] text-zinc-500 font-medium">{bookingDoc.specialization} &bull; {departments.find(d => d.id === bookingDeptId)?.name}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Date & Time</p>
+                                                <div className="flex items-center gap-2 text-[14px] font-bold text-zinc-800">
+                                                    <Calendar className="w-4 h-4 text-emerald-500" /> {bookingDate}
+                                                </div>
+                                                <div className="flex items-center gap-2 text-[14px] font-bold text-zinc-800 mt-1">
+                                                    <Clock className="w-4 h-4 text-emerald-500" /> {selectedSlot}
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Consultation Fee</p>
+                                                <p className="text-2xl font-black text-zinc-900">₹{bookingDoc.consultationFee}</p>
+                                                <p className="text-[11px] text-zinc-500">Payable at hospital</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-6 bg-zinc-50/50">
+                                        <div className="flex items-start gap-3">
+                                            <div className="mt-1"><Activity className="w-4 h-4 text-zinc-400" /></div>
+                                            <div>
+                                                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-0.5">Clinical Note</p>
+                                                <p className="text-[13px] text-zinc-600 font-medium leading-relaxed italic">"{chiefComplaint}"</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-10 space-y-3">
+                                    <Button onClick={handleBookAppointment} loading={bookingLoading} className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-500/20 text-[14px] font-bold">Confirm & Book Appointment</Button>
+                                    <p className="text-center text-[11px] text-zinc-400 font-medium px-4">By confirming, you agree to our hospital's clinical attendance and cancellation policies.</p>
                                 </div>
                             </div>
-
-                            <Button onClick={() => setBookingStep(4)} disabled={!selectedSlot || !bookingDate || !chiefComplaint || !patientAge} className="w-full mt-8">Review & Confirm</Button>
-                        </div>
-                    )}
-
-                    {/* Step 4: Finalize */}
-                    {bookingStep === 4 && bookingDoc && (
-                        <div className="animate-in slide-in-from-right-2 fade-in duration-200">
-                            <button onClick={() => setBookingStep(3)} className="flex items-center gap-1 text-zinc-500 hover:text-zinc-900 text-[12px] font-bold mb-4"><ArrowLeft className="w-3 h-3" /> Back</button>
-                            <h3 className="text-[15px] font-semibold text-zinc-900 mb-5">Confirm Details</h3>
-                            <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-4">
-                                <div className="flex justify-between items-center"><span className="text-zinc-500 text-[12px]">Specialist</span><span className="font-bold text-zinc-900 text-[13px]">{bookingDoc.fullName}</span></div>
-                                <div className="flex justify-between items-center"><span className="text-zinc-500 text-[12px]">Schedule</span><span className="font-bold text-zinc-900 text-[13px]">{bookingDate} at {selectedSlot}</span></div>
-                                <div className="flex justify-between items-center"><span className="text-zinc-500 text-[12px]">Consultation Fee</span><span className="font-bold text-zinc-900 text-[13px]">₹{bookingDoc.consultationFee}</span></div>
-                            </div>
-                            <Button onClick={handleBookAppointment} loading={bookingLoading} className="w-full mt-8 h-12 bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20">Finalize Booking</Button>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </Modal>
 
             {/* Other Modals (Prescription, Appointment Detail) */}
-            <Modal isOpen={!!selectedAppointment} onClose={() => setSelectedAppointment(null)} title="Appointment Details" size="md">
+            <Modal isOpen={!!selectedAppointment} onClose={() => setSelectedAppointment(null)} title="Appointment Information" size="md">
                 {selectedAppointment && (
-                    <div className="space-y-6">
-                        <div className="bg-[#FDFDFD] border border-zinc-200 rounded-[20px] p-6 shadow-sm">
-                            <h3 className="text-xl font-bold tracking-tight text-zinc-900 mb-1">{selectedAppointment.doctorName}</h3>
-                            <p className="text-[13px] text-zinc-500 font-medium">{selectedAppointment.departmentName || 'Specialist'}</p>
-                            <div className="mt-6 space-y-3">
-                                <div className="flex justify-between"><span className="text-[12px] text-zinc-500">Date</span><span className="text-[13px] font-bold">{selectedAppointment.appointmentDate}</span></div>
-                                <div className="flex justify-between"><span className="text-[12px] text-zinc-500">Time</span><span className="text-[13px] font-bold">{selectedAppointment.appointmentTime}</span></div>
-                                <div className="flex justify-between"><span className="text-[12px] text-zinc-500">Status</span><Badge variant={statusBadge(selectedAppointment.status)}>{selectedAppointment.status}</Badge></div>
+                    <div className="space-y-8">
+                        <div className="relative overflow-hidden bg-white border border-zinc-200 rounded-[28px] shadow-sm">
+                            <div className="bg-zinc-900 p-6 text-white relative">
+                                <div className="absolute top-0 right-0 p-8 opacity-10">
+                                    <Activity className="w-32 h-32" />
+                                </div>
+                                <div className="relative z-10">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <Badge variant={statusBadge(selectedAppointment.status)}>{selectedAppointment.status}</Badge>
+                                        <p className="text-[12px] font-bold opacity-60 uppercase tracking-widest">Token #{selectedAppointment.tokenNumber || '---'}</p>
+                                    </div>
+                                    <h3 className="text-2xl font-black tracking-tight mb-1">{(selectedAppointment.doctorName || '').toLowerCase().startsWith('dr.') ? selectedAppointment.doctorName : `Dr. ${selectedAppointment.doctorName}`}</h3>
+                                    <p className="text-[13px] opacity-70 font-medium uppercase tracking-wider">{selectedAppointment.departmentName || 'Medical Specialist'}</p>
+                                </div>
+                            </div>
+
+                            <div className="p-8 space-y-8">
+                                <div className="grid grid-cols-2 gap-8">
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5"><Calendar className="w-3 h-3" /> Visit Date</p>
+                                        <p className="text-[15px] font-bold text-zinc-900">{selectedAppointment.appointmentDate}</p>
+                                    </div>
+                                    <div className="space-y-1 text-right">
+                                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5 justify-end"><Clock className="w-3 h-3" /> Time Slot</p>
+                                        <p className="text-[15px] font-bold text-zinc-900">{selectedAppointment.appointmentTime}</p>
+                                    </div>
+                                </div>
+
+                                <div className="h-px bg-zinc-100" />
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5"><User className="w-3 h-3" /> Patient Subject</p>
+                                        <p className="text-[14px] font-bold text-zinc-900">{selectedAppointment.patientName || user?.fullName}</p>
+                                        <p className="text-[12px] text-zinc-500 font-medium">{selectedAppointment.patientAge || '---'} Years Old</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5"><HeartPulse className="w-3 h-3" /> Chief Complaint</p>
+                                        <p className="text-[13px] font-medium text-zinc-600 leading-relaxed italic">"{selectedAppointment.chiefComplaint || 'No clinical notes provided.'}"</p>
+                                    </div>
+                                </div>
+
+                                {selectedAppointment.status === 'Scheduled' && (
+                                    <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
+                                        <div className="mt-0.5"><Activity className="w-4 h-4 text-amber-600" /></div>
+                                        <p className="text-[11px] text-amber-800 font-medium leading-relaxed">Please arrive 15 minutes before your scheduled time. Carry any previous medical reports for review.</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                        <Button className="w-full" onClick={() => setSelectedAppointment(null)}>Close</Button>
+                        
+                        <div className="flex gap-3 pt-2">
+                            <Button className="flex-1" variant="secondary" onClick={() => setSelectedAppointment(null)}>Close Window</Button>
+                            {selectedAppointment.status === 'Scheduled' && (
+                                <Button className="flex-1 bg-red-50 text-red-600 border-red-100 hover:bg-red-100 hover:border-red-200" onClick={async () => {
+                                    if (window.confirm('Are you sure you want to cancel this appointment?')) {
+                                        try {
+                                            await appointmentApi.cancel(selectedAppointment.id);
+                                            addToast({ type: 'success', title: 'Cancelled', message: 'Appointment cancelled successfully' });
+                                            setSelectedAppointment(null);
+                                            const apptRes = await appointmentApi.getMy();
+                                            setAppointments(apptRes.data);
+                                        } catch (err) {
+                                            addToast({ type: 'error', title: 'Error', message: 'Could not cancel appointment' });
+                                        }
+                                    }
+                                }}>Cancel Visit</Button>
+                            )}
+                        </div>
                     </div>
                 )}
             </Modal>
@@ -767,21 +1042,36 @@ export const PatientDashboard = () => {
                         </div>
                         <div className="space-y-3">
                             {selectedPrescription.items?.map((it: any, i: number) => (
-                                <div key={i} className="flex justify-between items-center py-2 border-b border-zinc-50">
-                                    <div><p className="text-[13px] font-bold text-zinc-900">{it.medicineName}</p><p className="text-[11px] text-zinc-500">{it.dosage} - {it.frequency}</p></div>
-                                    <div className="text-right">
-                                        <p className="text-[12px] font-bold">{it.durationDays} Days</p>
-                                        <p className="text-[11px] text-zinc-400">₹{it.lineTotal}</p>
-                                    </div>
-                                </div>
-                            ))}
+                                <div key={i} className={`flex justify-between items-center py-2 border-b border-zinc-50 ${it.isOutOfStock ? 'opacity-60' : ''}`}>
+                                   <div>
+                                       <div className="flex items-center gap-2">
+                                           <p className="text-[13px] font-bold text-zinc-900">{it.medicineName}</p>
+                                           {it.isOutOfStock && <Badge variant="error" className="text-[8px] px-1 py-0 uppercase">STOCK OUT - Buy Outside</Badge>}
+                                       </div>
+                                       <p className="text-[11px] text-zinc-500">{it.dosage} - {it.frequency}</p>
+                                       {it.isOutOfStock && <p className="text-[10px] text-red-500 font-medium italic">Unavailable in Hospital Pharmacy</p>}
+                                   </div>
+                                   <div className="text-right">
+                                       <p className="text-[12px] font-bold">{it.durationDays} Days</p>
+                                       <p className={`text-[11px] ${it.isOutOfStock ? 'line-through text-red-400' : 'text-zinc-400'}`}>₹{it.lineTotal}</p>
+                                   </div>
+                                </div>                            ))}
                         </div>
                         {selectedPrescription.isPaid && !selectedPrescription.isMedicinePaid && selectedPrescription.status !== 'Dispensed' && (
                             <div className="pt-2">
-                                <Button className="w-full bg-blue-600 hover:bg-blue-700 shadow-md" onClick={() => handlePayForPrescription(selectedPrescription, true)}>
-                                    Pay for Medicines (Optional: ₹{selectedPrescription.totalCost})
-                                </Button>
-                                <p className="text-[10px] text-zinc-400 text-center mt-2 italic">Medicine payment is optional. You can also pay at the counter.</p>
+                                {selectedPrescription.items?.some((it: any) => !it.isOutOfStock) ? (
+                                    <>
+                                        <Button className="w-full bg-blue-600 hover:bg-blue-700 shadow-md" onClick={() => handlePayForPrescription(selectedPrescription, true)}>
+                                            Pay for Available Medicines (₹{selectedPrescription.totalCost})
+                                        </Button>
+                                        <p className="text-[10px] text-zinc-400 text-center mt-2 italic">Payment for unavailable items has been removed.</p>
+                                    </>
+                                ) : (
+                                    <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-center">
+                                        <p className="text-[12px] font-bold text-red-600">All medicines are currently out of stock.</p>
+                                        <p className="text-[10px] text-red-500 mt-1 italic">Please purchase these medications from an external pharmacy. No hospital payment required.</p>
+                                    </div>
+                                )}
                             </div>
                         )}
                         {selectedPrescription.isMedicinePaid && (
@@ -794,6 +1084,8 @@ export const PatientDashboard = () => {
                     </div>
                 )}
             </Modal>
+
+            <AIChat isOpen={aiChatOpen} onClose={() => setAIChatOpen(false)} />
         </div>
     );
 };

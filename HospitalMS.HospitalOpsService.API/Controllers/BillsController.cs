@@ -50,4 +50,31 @@ public class BillsController : ControllerBase
         try { return Ok(await _svc.RecordPaymentAsync(id, dto)); }
         catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
     }
+
+    // Patient pays online
+    [HttpPost("{id}/pay-online")]
+    [Authorize]
+    public async Task<IActionResult> PayOnline(int id)
+    {
+        try { return Ok(await _svc.ProcessOnlinePaymentAsync(id)); }
+        catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpPost("{id}/create-razorpay-order")]
+    [Authorize]
+    public async Task<IActionResult> CreateRazorpayOrder(int id)
+    {
+        try { return Ok(await _svc.CreateRazorpayOrderAsync(id)); }
+        catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpPost("verify-razorpay-payment")]
+    [Authorize]
+    public async Task<IActionResult> VerifyRazorpayPayment([FromBody] RazorpayPaymentVerificationDto dto)
+    {
+        // Note: dto.PrescriptionId is being used as BillId in the shared DTO for simplicity
+        var success = await _svc.VerifyRazorpayPaymentAsync(dto);
+        if (success) return Ok(new { message = "Payment verified successfully" });
+        return BadRequest(new { message = "Invalid payment signature" });
+    }
 }

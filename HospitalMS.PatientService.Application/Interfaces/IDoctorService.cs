@@ -14,10 +14,12 @@ public interface IDoctorService
     Task UpdateAsync(UpdateDoctorDto dto);
     Task DeactivateAsync(int id);
     Task ToggleAvailabilityAsync(int id);
+    Task UpdateSlotDurationAsync(int userId, int duration);
 
     // Schedule Management
     Task<List<DoctorScheduleDto>> GetSchedulesAsync(int doctorId);
     Task<DoctorScheduleDto> AddScheduleAsync(int doctorId, CreateDoctorScheduleDto dto);
+    Task UpdateScheduleAsync(int scheduleId, CreateDoctorScheduleDto dto);
     Task DeleteScheduleAsync(int scheduleId);
     Task<List<string>> GetAvailableTimeSlotsAsync(int doctorId, DateOnly date);
 }

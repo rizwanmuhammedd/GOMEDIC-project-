@@ -20,6 +20,9 @@ public class AdmissionResponseDto
 {
     public int Id { get; set; }
     public int PatientId { get; set; }
+    public string PatientName { get; set; } = string.Empty;
+    public string? PatientPhone { get; set; }
+    public int PatientAge { get; set; }
     public int DoctorId { get; set; }
     public string BedNumber { get; set; } = string.Empty;
     public string WardType { get; set; } = string.Empty;
@@ -36,4 +39,9 @@ public class BedDto
     public string BedNumber { get; set; } = string.Empty;
     public string WardType { get; set; } = string.Empty; // ICU | General | Private
     public string Status { get; set; } = string.Empty; // Available | Occupied | UnderCleaning
+}
+
+public class UpdateBedStatusDto
+{
+    public string Status { get; set; } = string.Empty;
 }

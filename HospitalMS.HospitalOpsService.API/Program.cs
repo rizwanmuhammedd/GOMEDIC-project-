@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Hangfire;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,7 +18,15 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddDbContext<HospitalOpsDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("OpsDb")));
 
-// 2. Repositories
+// 2. Hangfire
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(builder.Configuration.GetConnectionString("OpsDb")));
+builder.Services.AddHangfireServer();
+
+// 3. Repositories
 builder.Services.AddScoped<ITenantProvider,       TenantProvider>();
 builder.Services.AddScoped<IMedicineRepository,     MedicineRepository>();
 builder.Services.AddScoped<IPrescriptionRepository, PrescriptionRepository>();
@@ -61,9 +70,31 @@ builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
+// Seed Database
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<HospitalOpsDbContext>();
+        await DbInitializer.SeedMedicinesAsync(context);
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while seeding the database.");
+    }
+}
+
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new Hangfire.Dashboard.LocalRequestsOnlyAuthorizationFilter() }
+});
+
 app.MapControllers();
 app.Run();

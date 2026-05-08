@@ -29,6 +29,9 @@ public class BillDto
     public int Id { get; set; }
     public string BillNumber { get; set; } = string.Empty;
     public int PatientId { get; set; }
+    public string PatientName { get; set; } = string.Empty;
+    public string? PatientPhone { get; set; }
+    public int PatientAge { get; set; }
     public int? PrescriptionId { get; set; }
     public decimal ConsultationCharge { get; set; }
     public decimal MedicineCharge { get; set; }

@@ -56,4 +56,5 @@ public class PrescriptionItemResponseDto
     public string? Instructions { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal LineTotal { get; set; }
+    public bool IsOutOfStock { get; set; }
 }

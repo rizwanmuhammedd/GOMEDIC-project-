@@ -76,6 +76,8 @@ public partial class PatientDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Appointm__3214EC075AE861A1");
 
+            entity.Property(e => e.PatientName).HasMaxLength(150);
+            entity.Property(e => e.PatientPhone).HasMaxLength(20);
             entity.Property(e => e.ChiefComplaint).HasMaxLength(500);
             entity.Property(e => e.ConsultationNotes).HasMaxLength(2000);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");

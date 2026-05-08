@@ -43,6 +43,16 @@ public class PrescriptionsController : ControllerBase
         catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
     }
 
+    // Doctor updates prescription
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Doctor")]
+    public async Task<IActionResult> Update(int id, [FromBody] CreatePrescriptionDto dto)
+    {
+        var doctorId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        try { return Ok(await _svc.UpdateAsync(id, doctorId, dto)); }
+        catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
     // Pharmacist dispenses
     [HttpPatch("{id}/dispense")]
     [Authorize(Roles = "Pharmacist")]

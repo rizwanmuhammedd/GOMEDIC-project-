@@ -27,7 +27,9 @@ const DoctorSchedulePage: React.FC = () => {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [updatingDuration, setUpdatingDuration] = useState(false);
   const [doctorId, setDoctorId] = useState<number | null>(null);
+  const [appointmentDuration, setAppointmentDuration] = useState(15);
   const { addToast } = useNotifications();
 
   // New Schedule State
@@ -45,14 +47,28 @@ const DoctorSchedulePage: React.FC = () => {
   const fetchMyProfileAndSchedules = async () => {
     try {
       const profileRes = await doctorApi.getMe();
-      const docId = profileRes.data.id;
-      setDoctorId(docId);
-      const scheduleRes = await doctorApi.getSchedules(docId);
+      const doc = profileRes.data;
+      setDoctorId(doc.id);
+      setAppointmentDuration(doc.appointmentDuration || 15);
+      const scheduleRes = await doctorApi.getSchedules(doc.id);
       setSchedules(scheduleRes.data);
     } catch (err) {
       addToast({ type: 'error', title: 'Error', message: 'Failed to load schedule data' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateDuration = async (val: number) => {
+    setUpdatingDuration(true);
+    try {
+      await doctorApi.updateSlotDuration(val);
+      setAppointmentDuration(val);
+      addToast({ type: 'success', title: 'Configuration Updated', message: `Appointment duration set to ${val === 0 ? 'Random' : val + ' minutes'}` });
+    } catch (err) {
+      addToast({ type: 'error', title: 'Update Failed', message: 'Could not update slot configuration' });
+    } finally {
+      setUpdatingDuration(false);
     }
   };
 
@@ -104,10 +120,26 @@ const DoctorSchedulePage: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-20">
-      <PageHeader
-        title="Manage My Schedule"
-        subtitle="Define your availability and clinical time slots."
-      />
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <PageHeader
+            title="Manage My Schedule"
+            subtitle="Define your availability and clinical time slots."
+          />
+          
+          <div className="bg-white p-2 rounded-2xl border border-zinc-100 shadow-sm flex items-center gap-1">
+              <span className="text-[11px] font-black text-zinc-400 uppercase tracking-widest px-3">Slot Duration</span>
+              {[15, 30, 0].map(val => (
+                  <button
+                    key={val}
+                    disabled={updatingDuration}
+                    onClick={() => handleUpdateDuration(val)}
+                    className={`px-4 py-2 rounded-xl text-[12px] font-bold transition-all ${appointmentDuration === val ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-zinc-500 hover:bg-zinc-50'}`}
+                  >
+                      {val === 0 ? 'Random' : `${val} Min`}
+                  </button>
+              ))}
+          </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Add Schedule Form */}

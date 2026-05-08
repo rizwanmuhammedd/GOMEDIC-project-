@@ -208,6 +208,19 @@ public class AuthService : IAuthService
         }
     }
 
+    public async Task UpdateProfileAsync(int userId, UpdateProfileDto dto)
+    {
+        var user = await _userRepo.GetByIdAsync(userId);
+        if (user == null) throw new Exception("User not found");
+
+        user.FullName = dto.FullName;
+        user.Phone = dto.Phone;
+        user.DateOfBirth = dto.DateOfBirth;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _userRepo.UpdateAsync(user);
+    }
+
     public async Task DeactivateUserAsync(int userId)
     {
         var user = await _userRepo.GetByIdAsync(userId);
@@ -262,6 +275,11 @@ public class AuthService : IAuthService
         return response;
     }
 
+    public async Task<User?> GetUserByIdAsync(int userId)
+    {
+        return await _userRepo.GetByIdAsync(userId);
+    }
+
     private AuthResponseDto BuildResponse(User user)
     {
         var token = GenerateJwtToken(user);
@@ -278,6 +296,7 @@ public class AuthService : IAuthService
             FullName = user.FullName,
             Email = user.Email,
             Role = user.Role,
+            Phone = user.Phone,
             DateOfBirth = user.DateOfBirth,
             ProfileImageUrl = user.ProfileImageUrl,
             TenantId = user.TenantId,

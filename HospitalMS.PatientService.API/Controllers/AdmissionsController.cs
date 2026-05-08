@@ -19,6 +19,11 @@ public class AdmissionsController : ControllerBase
     [Authorize(Roles = "Admin,Receptionist,Doctor")]
     public async Task<IActionResult> GetActive()
         => Ok(await _svc.GetAllActiveAsync());
+
+    [HttpGet("pending")]
+    [Authorize(Roles = "Admin,Receptionist")]
+    public async Task<IActionResult> GetPending()
+        => Ok(await _svc.GetPendingAdmissionsAsync());
         
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
@@ -38,9 +43,17 @@ public class AdmissionsController : ControllerBase
         try { return Ok(await _svc.AdmitPatientAsync(dto)); }
         catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
     }
+
+    [HttpPatch("{id:int}/assign-bed/{bedId:int}")]
+    [Authorize(Roles = "Receptionist,Admin")]
+    public async Task<IActionResult> AssignBed(int id, int bedId)
+    {
+        try { return Ok(await _svc.AssignBedAsync(id, bedId)); }
+        catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
+    }
     
     [HttpPut("{id:int}/discharge")]
-    [Authorize(Roles = "Doctor,Admin")]
+    [Authorize(Roles = "Doctor,Admin,Receptionist")]
     public async Task<IActionResult> Discharge(int id, [FromBody] DischargePatientDto dto)
     {
         try { return Ok(await _svc.DischargePatientAsync(id, dto)); }

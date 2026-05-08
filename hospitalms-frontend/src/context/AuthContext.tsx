@@ -123,6 +123,7 @@ export interface AuthUser {
   fullName: string;
   email: string;
   role: Role;
+  phone: string;
   token: string;
   refreshToken?: string;
   tokenExpiry?: string;

@@ -81,6 +81,8 @@ public partial class HospitalOpsDbContext : DbContext
         modelBuilder.Entity<Prescription>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.PatientName).HasMaxLength(150);
+            entity.Property(e => e.PatientPhone).HasMaxLength(20);
             entity.Property(e => e.Notes).HasMaxLength(500);
             entity.Property(e => e.PrescribedAt).HasDefaultValueSql("(getutcdate())");
             entity.Property(e => e.Status).HasMaxLength(30).HasDefaultValue("Pending");

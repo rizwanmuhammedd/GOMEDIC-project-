@@ -6,6 +6,7 @@ using HospitalMS.HospitalOpsService.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Razorpay.Api;
 using System.Net.Http.Json;
+using Hangfire;
 
 namespace HospitalMS.HospitalOpsService.Application.Services;
 
@@ -45,11 +46,30 @@ public class PrescriptionService : IPrescriptionService
                 throw new Exception($"Medicine ID {item.MedicineId} not found or inactive");
         }
 
+        // If phone is missing, try to fetch from Appointment service
+        var finalPhone = dto.PatientPhone;
+        if (string.IsNullOrEmpty(finalPhone) && dto.AppointmentId.HasValue)
+        {
+            try
+            {
+                var apptResponse = await _httpClient.GetAsync($"http://localhost:5000/api/appointments/{dto.AppointmentId.Value}");
+                if (apptResponse.IsSuccessStatusCode)
+                {
+                    var apptData = await apptResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                    if (apptData.TryGetProperty("patientPhone", out var phoneProp) || apptData.TryGetProperty("PatientPhone", out phoneProp))
+                    {
+                        finalPhone = phoneProp.GetString();
+                    }
+                }
+            }
+            catch { /* Ignore and keep empty */ }
+        }
+
         var prescription = new Prescription
         {
             PatientId     = dto.PatientId,
             PatientName   = dto.PatientName,
-            PatientPhone  = dto.PatientPhone,
+            PatientPhone  = finalPhone,
             DoctorId      = doctorId,
             AppointmentId = dto.AppointmentId,
             Notes         = dto.Notes,
@@ -70,13 +90,27 @@ public class PrescriptionService : IPrescriptionService
 
         // Auto-generate Bill for Consultation Fee
         var mapped = await MapAsync(saved);
-        await _billService.GenerateBillAsync(new GenerateBillDto
+        var bill = await _billService.GenerateBillAsync(new GenerateBillDto
         {
             PatientId = saved.PatientId,
             PrescriptionId = saved.Id,
             ConsultationCharge = mapped.ConsultationFee,
             GeneratedByUserId = doctorId // Assigned doctor ID
         });
+
+        // Setup Payment Reminders every 5 minutes
+        try
+        {
+            Hangfire.RecurringJob.AddOrUpdate<IBillService>(
+                $"payment_reminder_{bill.Id}",
+                svc => svc.SendPaymentReminderAsync(bill.Id),
+                "*/5 * * * *" // CRON: Every 5 minutes
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to setup Hangfire reminder: {ex.Message}");
+        }
         
         // Notify Patient (Persistent)
         try
@@ -115,6 +149,47 @@ public class PrescriptionService : IPrescriptionService
         return await MapAsync(saved);
     }
 
+    public async Task<PrescriptionResponseDto> UpdateAsync(int prescriptionId, int doctorId, CreatePrescriptionDto dto)
+    {
+        var existing = await _repo.GetByIdWithItemsAsync(prescriptionId);
+        if (existing == null) throw new Exception("Prescription not found");
+        if (existing.DoctorId != doctorId) throw new Exception("You are not authorized to update this prescription");
+        if (existing.Status != "Pending") throw new Exception("Only pending prescriptions can be edited");
+
+        if (!dto.Items.Any())
+            throw new Exception("Prescription must have at least one medicine");
+
+        // Validate all medicines exist
+        foreach (var item in dto.Items)
+        {
+            var med = await _medRepo.GetByIdAsync(item.MedicineId);
+            if (med == null || med.IsActive == false)
+                throw new Exception($"Medicine ID {item.MedicineId} not found or inactive");
+        }
+
+        existing.Notes = dto.Notes;
+        existing.PatientName = dto.PatientName;
+        existing.PatientPhone = dto.PatientPhone;
+
+        // Update items
+        existing.PrescriptionItems.Clear();
+        foreach (var i in dto.Items)
+        {
+            existing.PrescriptionItems.Add(new PrescriptionItem
+            {
+                MedicineId = i.MedicineId,
+                Dosage = i.Dosage,
+                Frequency = i.Frequency,
+                DurationDays = i.DurationDays,
+                QuantityToDispense = i.QuantityToDispense,
+                Instructions = i.Instructions
+            });
+        }
+
+        await _repo.UpdateAsync(existing);
+        return await MapAsync(existing);
+    }
+
     // Pharmacist dispenses prescription
     public async Task<PrescriptionResponseDto> DispenseAsync(
         int prescriptionId, int pharmacistId)
@@ -125,41 +200,29 @@ public class PrescriptionService : IPrescriptionService
         if (prescription.Status == "Dispensed")
             throw new Exception("Prescription already dispensed");
 
-        // Check sufficient stock for ALL medicines first
+        // Deduct stock ONLY for available medicines
         foreach (var item in prescription.PrescriptionItems)
         {
             var med = await _medRepo.GetByIdAsync(item.MedicineId);
-            if (med == null)
-                throw new Exception($"Medicine not found");
-            if (med.StockQuantity < item.QuantityToDispense)
-                throw new Exception(
-                    $"Insufficient stock for {med.Name}. " +
-                    $"Available: {med.StockQuantity}, Required: {item.QuantityToDispense}");
-        }
-
-        // Deduct stock for each medicine
-        foreach (var item in prescription.PrescriptionItems)
-        {
-            var med = await _medRepo.GetByIdAsync(item.MedicineId);
-            int newStock = med!.StockQuantity - item.QuantityToDispense;
-            await _medRepo.UpdateStockAsync(med.Id, newStock);
-
-            // Check for low stock after deduction
-            if (newStock <= med.MinimumStockLevel)
+            if (med != null && med.StockQuantity >= item.QuantityToDispense)
             {
-                try
+                int newStock = med.StockQuantity - item.QuantityToDispense;
+                await _medRepo.UpdateStockAsync(med.Id, newStock);
+
+                // Check for low stock after deduction
+                if (newStock <= med.MinimumStockLevel)
                 {
-                    await _httpClient.PostAsJsonAsync("http://localhost:5004/api/notifications/role", new
+                    try
                     {
-                        Role = "Pharmacist",
-                        Title = "⚠ Low Stock Alert",
-                        Message = $"Medicine '{med.Name}' is low on stock ({newStock} units left).",
-                        Type = "warning"
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to send low stock notification for {med.Name}: {ex.Message}");
+                        await _httpClient.PostAsJsonAsync("http://localhost:5004/api/notifications/role", new
+                        {
+                            Role = "Pharmacist",
+                            Title = "⚠ Low Stock Alert",
+                            Message = $"Medicine '{med.Name}' is low on stock ({newStock} units left).",
+                            Type = "warning"
+                        });
+                    }
+                    catch { /* Ignore notification failures */ }
                 }
             }
         }
@@ -292,7 +355,15 @@ public class PrescriptionService : IPrescriptionService
                 var med = item.Medicine ?? (item.MedicineId > 0 ? await _medRepo.GetByIdAsync(item.MedicineId) : null);
                 var unitPrice = med?.UnitPrice ?? 0;
                 var lineTotal = unitPrice * item.QuantityToDispense;
-                total += lineTotal;
+                
+                bool isOutOfStock = med == null || med.StockQuantity < item.QuantityToDispense;
+                
+                // Patient only pays for available medicine
+                if (!isOutOfStock)
+                {
+                    total += lineTotal;
+                }
+
                 items.Add(new PrescriptionItemResponseDto
                 {
                     MedicineId         = item.MedicineId,
@@ -303,7 +374,8 @@ public class PrescriptionService : IPrescriptionService
                     QuantityToDispense = item.QuantityToDispense,
                     Instructions       = item.Instructions ?? "",
                     UnitPrice          = unitPrice,
-                    LineTotal          = lineTotal
+                    LineTotal          = lineTotal,
+                    IsOutOfStock       = isOutOfStock
                 });
             }
         }

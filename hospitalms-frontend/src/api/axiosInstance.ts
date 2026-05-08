@@ -7,7 +7,7 @@ const TOKEN_KEY = 'hms_token';
 
 const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  timeout: 30000,
 });
 
 api.interceptors.request.use(
@@ -48,6 +48,7 @@ export const authApi = {
   resetPassword: (data: any) => api.post('/api/auth/reset-password', data),
   deleteUser: (id: number) => api.delete(`/api/auth/users/${id}`),
   restoreUser: (id: number) => api.post(`/api/auth/users/${id}/restore`),
+  updateProfile: (data: any) => api.patch('/api/auth/profile', data),
   uploadPicture: (file: File, updateProfile: boolean = false) => {
     const formData = new FormData();
     formData.append('File', file);
@@ -72,6 +73,7 @@ export const doctorApi = {
   deleteSchedule: (scheduleId: number) => api.delete(`/api/doctors/schedules/${scheduleId}`),
   getAvailableSlots: (doctorId: number, date: string) => api.get(`/api/appointments/slots/${doctorId}?date=${date}`),
   updateProfilePicture: (imageUrl: string) => api.patch('/api/doctors/profile-picture', { imageUrl }),
+  updateSlotDuration: (duration: number) => api.patch('/api/doctors/slot-duration', { duration }),
 };
 
 // ==================== APPOINTMENT API ====================
@@ -89,7 +91,7 @@ export const appointmentApi = {
 export const bedApi = {
   getAll: () => api.get('/api/Beds'),
   getAvailable: () => api.get('/api/Beds/available'),
-  updateStatus: (id: number, status: string) => api.patch(`/api/Beds/${id}/status`, status),
+  updateStatus: (id: number, status: string) => api.patch(`/api/Beds/${id}/status`, { status }),
 };
 
 // ==================== ADMISSION API ====================
@@ -114,6 +116,7 @@ export const prescriptionApi = {
   getPending: () => api.get('/api/prescriptions/pending'),
   getByPatient: (patientId: number) => api.get(`/api/prescriptions/patient/${patientId}`),
   create: (data: any) => api.post('/api/prescriptions', data),
+  update: (id: number, data: any) => api.put(`/api/prescriptions/${id}`, data),
   dispense: (id: number) => api.patch(`/api/prescriptions/${id}/dispense`),
 };
 

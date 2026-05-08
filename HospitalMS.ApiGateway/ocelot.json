@@ -38,6 +38,13 @@
       "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
     },
     {
+      "UpstreamPathTemplate": "/api/Doctors",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/Doctors",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
+    },
+    {
       "UpstreamPathTemplate": "/api/doctors/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
       "DownstreamPathTemplate": "/api/Doctors/{everything}",
@@ -45,9 +52,58 @@
       "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
     },
     {
+      "UpstreamPathTemplate": "/api/Doctors/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/Doctors/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/departments",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/Departments",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/Departments",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/Departments",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
+    },
+    {
       "UpstreamPathTemplate": "/api/departments/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
       "DownstreamPathTemplate": "/api/Departments/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/Departments/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/Departments/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/doctors/schedules/{scheduleId}",
+      "UpstreamHttpMethod": [ "PUT", "DELETE" ],
+      "DownstreamPathTemplate": "/api/Doctors/schedules/{scheduleId}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/doctors/slot-duration",
+      "UpstreamHttpMethod": [ "PATCH" ],
+      "DownstreamPathTemplate": "/api/Doctors/slot-duration",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/Doctors/slot-duration",
+      "UpstreamHttpMethod": [ "PATCH" ],
+      "DownstreamPathTemplate": "/api/Doctors/slot-duration",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
     },
@@ -101,6 +157,20 @@
       "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
     },
     {
+      "UpstreamPathTemplate": "/api/admissions/pending",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/api/admissions/pending",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/admissions/{id}/assign-bed/{bedId}",
+      "UpstreamHttpMethod": [ "PATCH" ],
+      "DownstreamPathTemplate": "/api/admissions/{id}/assign-bed/{bedId}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5002 } ]
+    },
+    {
       "UpstreamPathTemplate": "/api/admissions/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
       "DownstreamPathTemplate": "/api/admissions/{everything}",
@@ -131,8 +201,15 @@
     },
     {
       "UpstreamPathTemplate": "/api/prescriptions/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PATCH" ],
+      "UpstreamHttpMethod": [ "GET", "POST", "PATCH", "PUT" ],
       "DownstreamPathTemplate": "/api/prescriptions/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5003 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/bills/{id}/pay-online",
+      "UpstreamHttpMethod": [ "POST" ],
+      "DownstreamPathTemplate": "/api/bills/{id}/pay-online",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5003 } ]
     },

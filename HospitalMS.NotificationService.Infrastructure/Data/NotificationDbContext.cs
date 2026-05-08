@@ -22,12 +22,17 @@ public partial class NotificationDbContext : DbContext
 
     public virtual DbSet<Notification> Notifications { get; set; }
     public virtual DbSet<ChatMessage> ChatMessages { get; set; }
+    public virtual DbSet<BlockedChatUser> BlockedChatUsers { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<Notification>().HasQueryFilter(e => e.TenantId == _tenant!.TenantId);
-        modelBuilder.Entity<ChatMessage>().HasQueryFilter(e => e.TenantId == _tenant!.TenantId);
+        // Use a variable to avoid multiple null-checks or access issues during translation
+        int tenantId = _tenant?.TenantId ?? 1;
+
+        modelBuilder.Entity<Notification>().HasQueryFilter(e => e.TenantId == tenantId);
+        modelBuilder.Entity<ChatMessage>().HasQueryFilter(e => e.TenantId == tenantId);
+        modelBuilder.Entity<BlockedChatUser>().HasQueryFilter(e => e.TenantId == tenantId);
 
         modelBuilder.Entity<Notification>(entity =>
         {
@@ -55,6 +60,15 @@ public partial class NotificationDbContext : DbContext
             entity.Property(e => e.ReceptionistName).HasMaxLength(200);
             entity.Property(e => e.Message).HasMaxLength(2000);
             entity.Property(e => e.Timestamp).HasDefaultValueSql("(getutcdate())");
+        });
+
+        modelBuilder.Entity<BlockedChatUser>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.PatientId).HasMaxLength(50);
+            entity.Property(e => e.PatientName).HasMaxLength(200);
+            entity.Property(e => e.Reason).HasMaxLength(500);
+            entity.Property(e => e.BlockedAt).HasDefaultValueSql("(getutcdate())");
         });
 
       

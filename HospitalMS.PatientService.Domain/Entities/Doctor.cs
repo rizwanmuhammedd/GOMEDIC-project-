@@ -23,6 +23,8 @@ public partial class Doctor
 
     public bool IsAvailable { get; set; }
 
+    public int AppointmentDuration { get; set; } = 15; // Default 15 min
+
     public DateTime CreatedAt { get; set; }
 
     public int TenantId { get; set; }

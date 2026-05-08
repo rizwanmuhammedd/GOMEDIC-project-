@@ -86,7 +86,7 @@ const AdminDashboard: React.FC = () => {
     } finally { setLoading(false); }
   }, [addToast]);
 
-  useEffect(() => { loadData(); }, [loadData, location.pathname]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleFileUpload = async (file: File) => {
     setUploading(true);

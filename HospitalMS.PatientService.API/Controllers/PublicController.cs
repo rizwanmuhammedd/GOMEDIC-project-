@@ -20,7 +20,7 @@ public class PublicController : ControllerBase
     }
 
     [HttpGet("stats")]
-    public async Task<IActionResult> GetPublicStats()
+    public IActionResult GetPublicStats()
     {
         // ... (existing logic)
         return Ok(new { /*...*/ });

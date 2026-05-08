@@ -51,6 +51,21 @@ public class HospitalHub : Hub
 
         if (string.IsNullOrEmpty(patientId)) return;
 
+        // Check if blocked
+        if (await _chatRepo.IsUserBlockedAsync(patientId))
+        {
+            await Clients.Caller.SendAsync("ReceiveError", "You have been blocked from sending enquiries.");
+            return;
+        }
+
+        // 1. Enforce Minute Rate Limit (5 messages per minute)
+        var recentCount = await _chatRepo.GetRecentMessageCountAsync(patientId, 1);
+        if (recentCount >= 5)
+        {
+            await Clients.Caller.SendAsync("ReceiveError", "Rate limit exceeded: Please wait a minute before sending more messages (Limit: 5/min).");
+            return;
+        }
+
         var msg = new ChatMessage
         {
             PatientId = patientId,
@@ -76,6 +91,26 @@ public class HospitalHub : Hub
         
         // Echo to patient's OTHER connections only
         await Clients.OthersInGroup($"user_{patientId}").SendAsync("ReceiveEnquiry", enquiry);
+    }
+
+    [Authorize(Roles = "Receptionist,Admin")]
+    public async Task BlockUser(string patientId, string? patientName, string? reason)
+    {
+        await _chatRepo.BlockUserAsync(patientId, patientName, reason);
+        await Clients.Group($"user_{patientId}").SendAsync("UserBlocked", reason);
+        
+        // Notify other receptionists
+        await Clients.Group("Receptionist").SendAsync("PatientBlockedStatusChanged", new { PatientId = patientId, IsBlocked = true });
+    }
+
+    [Authorize(Roles = "Receptionist,Admin")]
+    public async Task UnblockUser(string patientId)
+    {
+        await _chatRepo.UnblockUserAsync(patientId);
+        await Clients.Group($"user_{patientId}").SendAsync("UserUnblocked");
+
+        // Notify other receptionists
+        await Clients.Group("Receptionist").SendAsync("PatientBlockedStatusChanged", new { PatientId = patientId, IsBlocked = false });
     }
 
     // Receptionist replies to a specific patient

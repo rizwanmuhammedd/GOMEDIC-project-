@@ -39,9 +39,9 @@ public class BedsController : ControllerBase
 
     [HttpPatch("{id:int}/status")]
     [Authorize(Roles = "Admin,Receptionist")]
-    public async Task<IActionResult> UpdateStatus(int id, [FromBody] string status)
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateBedStatusDto dto)
     {
-        await _svc.UpdateStatusAsync(id, status);
+        await _svc.UpdateStatusAsync(id, dto.Status);
         return NoContent();
     }
 }

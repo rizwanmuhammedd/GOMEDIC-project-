@@ -11,6 +11,7 @@ public class CreateDoctorDto
     public string LicenseNumber { get; set; } = string.Empty;
     public decimal ConsultationFee { get; set; }
     public int MaxPatientsPerDay { get; set; } = 30;
+    public int AppointmentDuration { get; set; } = 15;
 }
 
 public class DoctorDto
@@ -27,6 +28,7 @@ public class DoctorDto
     public decimal ConsultationFee { get; set; }
     public int MaxPatientsPerDay { get; set; }
     public bool IsAvailable { get; set; }
+    public int AppointmentDuration { get; set; }
 }
 
 public class UpdateDoctorDto
@@ -40,6 +42,7 @@ public class UpdateDoctorDto
     public decimal ConsultationFee { get; set; }
     public int MaxPatientsPerDay { get; set; }
     public bool IsAvailable { get; set; }
+    public int AppointmentDuration { get; set; }
 }
 
 public class DoctorScheduleDto

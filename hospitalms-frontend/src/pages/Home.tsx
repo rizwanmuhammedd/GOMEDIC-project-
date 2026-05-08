@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   Stethoscope, Calendar, Shield, Activity, ArrowRight,
-  Users, Heart, HeartPulse, LogIn, UserPlus, ArrowLeft,
+  Users, User, Heart, HeartPulse, LogIn, UserPlus, ArrowLeft,
   FlaskConical, Pill, Building2, TrendingUp, BedDouble,
   Phone, MapPin, Mail, Star, CheckCircle2, AlertCircle,
   X, LayoutDashboard, Microscope,
   ArrowUpRight, Loader2, ChevronRight,
   BellRing, Settings2, Clock
 } from 'lucide-react';
+import { Button, Modal } from '../components/ui';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -151,8 +152,6 @@ function BookModal({ open, onClose, departments, token, isAuthenticated, initial
   useEffect(() => {
     if (!selectedDept) return;
     setDL(true);
-    // If we have an initialDocId and it belongs to this dept, we don't necessarily need to reset it, 
-    // but the doctors list should be loaded.
     apiFetch<any>(`/api/doctors/department/${selectedDept}`, token)
       .then(r => setDoctors(Array.isArray(r) ? r : (r.data ?? [])))
       .catch(() => setDoctors([]))
@@ -197,83 +196,92 @@ function BookModal({ open, onClose, departments, token, isAuthenticated, initial
 
   if (!open) return null;
 
-  const steps = ['Department', 'Specialist', 'Patient Info', 'Date & Time', 'Confirm'];
+  const steps = ['Department', 'Specialist', 'Patient Info', 'Schedule', 'Confirm'];
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-emerald-500/40 backdrop-blur-sm overflow-y-auto p-4 sm:p-6 md:p-12 flex justify-center items-start animate-in fade-in duration-200" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-[#FDFDFD] border border-zinc-200 rounded-[24px] w-full max-w-[560px] shadow-[0_32px_80px_rgba(0,0,0,0.08)] overflow-hidden relative mt-8 sm:mt-12 animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-[9999] bg-emerald-500/40 backdrop-blur-sm overflow-y-auto p-4 sm:p-6 md:p-12 flex justify-center items-start animate-in fade-in duration-300" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-[#FDFDFD] border border-zinc-200 rounded-[32px] w-full max-w-[580px] shadow-[0_32px_80px_rgba(0,0,0,0.12)] overflow-hidden relative mt-8 sm:mt-12 animate-in zoom-in-95 duration-300">
 
         {/* Modal Header */}
-        <div className="px-6 pt-6 pb-4 relative">
-          <button onClick={onClose} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-zinc-500 transition-colors">
-            <X strokeWidth={2} className="w-4 h-4" />
+        <div className="px-8 pt-8 pb-6 relative">
+          <button onClick={onClose} className="absolute top-8 right-8 w-10 h-10 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-zinc-500 transition-colors z-20">
+            <X strokeWidth={2} className="w-5 h-5" />
           </button>
 
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-900">
-              <Calendar strokeWidth={1.5} className="w-5 h-5" />
+          <div className="flex items-center gap-4 mb-8">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
+              <Calendar strokeWidth={2} className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-[18px] font-semibold text-zinc-900 tracking-tight leading-none">Schedule an Appointment</h2>
-              <p className="text-[13px] text-zinc-500 mt-1">GOMEDIC Clinical Interface</p>
+              <h2 className="text-[20px] font-bold text-zinc-900 tracking-tight leading-none">Schedule an Appointment</h2>
+              <p className="text-[14px] text-zinc-500 mt-1.5 font-medium">Connect with our healthcare professionals</p>
             </div>
           </div>
 
           {/* Progress Indicator */}
           {!success && (
-            <div className="flex gap-2 mb-2">
+            <div className="flex items-center px-2 py-4">
               {steps.map((s, i) => (
-                <div key={s} className="flex-1">
-                  <div className={`h-1 rounded-full mb-1.5 transition-colors duration-300 ${i < step ? 'bg-emerald-500' : 'bg-zinc-200'}`} />
-                  <span className={`text-[10px] font-semibold uppercase tracking-wider ${i < step ? 'text-zinc-900' : 'text-zinc-400'}`}>{s}</span>
-                </div>
+                <React.Fragment key={s}>
+                  <div className="flex flex-col items-center gap-2.5 relative z-10">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-bold transition-all duration-300 ${i + 1 <= step ? 'bg-emerald-500 text-white ring-4 ring-emerald-50' : 'bg-zinc-100 text-zinc-400'}`}>
+                      {i + 1 < step ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest absolute -bottom-6 whitespace-nowrap ${i + 1 <= step ? 'text-zinc-900' : 'text-zinc-400'}`}>{s}</span>
+                  </div>
+                  {i < steps.length - 1 && (
+                    <div className={`flex-1 h-0.5 mx-2 transition-colors duration-300 ${i + 1 < step ? 'bg-emerald-500' : 'bg-zinc-100'}`} />
+                  )}
+                </React.Fragment>
               ))}
             </div>
           )}
         </div>
 
         {/* Modal Body */}
-        <div className="px-6 pb-8">
+        <div className="px-8 pb-10 pt-4">
           {success ? (
-            <div className="text-center py-8 animate-in fade-in slide-in-from-bottom-2">
-              <div className="w-16 h-16 rounded-full bg-zinc-100 border-4 border-zinc-50 flex items-center justify-center mx-auto mb-5 text-zinc-900">
-                <CheckCircle2 strokeWidth={2} className="w-8 h-8" />
+            <div className="text-center py-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="w-20 h-20 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-6 text-emerald-500 ring-8 ring-emerald-50/50">
+                <CheckCircle2 strokeWidth={2} className="w-10 h-10" />
               </div>
-              <h3 className="text-[20px] font-semibold text-zinc-900 mb-2">Booking Confirmed</h3>
-              <p className="text-[14px] text-zinc-500 mb-8 max-w-[300px] mx-auto">Your appointment has been successfully scheduled. You can view the details in your dashboard.</p>
-              <button onClick={onClose} className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[14px] font-medium transition-colors">
-                Return to Home
+              <h3 className="text-[24px] font-bold text-zinc-900 mb-3">Booking Confirmed!</h3>
+              <p className="text-[15px] text-zinc-500 mb-10 max-w-[340px] mx-auto leading-relaxed font-medium">Your clinical appointment has been successfully scheduled. Details are available in your dashboard.</p>
+              <button onClick={onClose} className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-[16px] text-[15px] font-bold transition-all shadow-xl shadow-emerald-500/20">
+                Great, thanks!
               </button>
             </div>
           ) : (
-            <div className="min-h-[300px]">
+            <div className="min-h-[380px]">
 
               {/* Step 1: Department */}
               {step === 1 && (
                 <div className="animate-in slide-in-from-right-4 fade-in duration-300">
-                  <h3 className="text-[15px] font-semibold text-zinc-900 mb-1">Select Department</h3>
-                  <p className="text-[13px] text-zinc-500 mb-5">Choose the medical specialty required.</p>
+                  <div className="mb-6">
+                    <h3 className="text-[17px] font-bold text-zinc-900">Select Department</h3>
+                    <p className="text-[14px] text-zinc-500 mt-1">Which medical specialty do you need to visit?</p>
+                  </div>
 
-                  <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div className="grid grid-cols-2 gap-4 mb-8">
                     {departments.map(d => {
                       const meta = getDeptMeta(d.name);
                       const Icon = meta.icon;
                       const sel = selectedDept === d.id;
                       return (
                         <button key={d.id} onClick={() => setDept(d.id)}
-                          className={`p-3.5 rounded-xl border text-left flex items-center gap-3 transition-all ${sel ? 'border-emerald-500 bg-zinc-50 ring-1 ring-emerald-500' : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50'}`}>
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${sel ? 'bg-emerald-500 text-white' : 'bg-zinc-100 text-zinc-600'}`}>
-                            <Icon strokeWidth={sel ? 2 : 1.5} className="w-[18px] h-[18px]" />
+                          className={`p-5 rounded-[24px] border-2 text-center transition-all group ${sel ? 'border-emerald-500 bg-emerald-50/30' : 'border-zinc-100 bg-white hover:border-zinc-200 hover:bg-zinc-50/50'}`}>
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-all ${sel ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-zinc-50 text-zinc-400 group-hover:bg-white group-hover:text-zinc-600'}`}>
+                            <Icon strokeWidth={2.5} className="w-6 h-6" />
                           </div>
-                          <span className={`text-[13px] font-medium leading-tight ${sel ? 'text-zinc-900' : 'text-zinc-700'}`}>{d.name}</span>
+                          <span className={`text-[14px] font-bold block ${sel ? 'text-zinc-900' : 'text-zinc-700'}`}>{d.name}</span>
                         </button>
                       );
                     })}
                   </div>
 
                   <button onClick={() => selectedDept && setStep(2)} disabled={!selectedDept}
-                    className={`w-full py-2.5 rounded-xl text-[14px] font-medium transition-all flex items-center justify-center gap-2 ${selectedDept ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>
-                    Continue <ArrowRight strokeWidth={2} className="w-4 h-4" />
+                    className={`w-full h-14 rounded-[18px] text-[15px] font-bold transition-all flex items-center justify-center gap-2 ${selectedDept ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/20' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>
+                    Continue to Specialists <ArrowRight strokeWidth={3} className="w-4 h-4" />
                   </button>
                 </div>
               )}
@@ -281,43 +289,52 @@ function BookModal({ open, onClose, departments, token, isAuthenticated, initial
               {/* Step 2: Doctor */}
               {step === 2 && (
                 <div className="animate-in slide-in-from-right-4 fade-in duration-300">
-                  <button onClick={() => setStep(1)} className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-900 text-[13px] font-medium transition-colors mb-4"><ArrowLeft strokeWidth={2} className="w-3.5 h-3.5" /> Back</button>
-                  <h3 className="text-[15px] font-semibold text-zinc-900 mb-1">Select Specialist</h3>
-                  <p className="text-[13px] text-zinc-500 mb-5">Available specialists in the chosen department.</p>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-[17px] font-bold text-zinc-900">Select Specialist</h3>
+                      <p className="text-[14px] text-zinc-500 mt-1">Available experts in {departments.find(d => d.id === selectedDept)?.name}</p>
+                    </div>
+                    <button onClick={() => setStep(1)} className="w-10 h-10 rounded-full hover:bg-zinc-100 flex items-center justify-center text-zinc-400 transition-colors"><ArrowLeft strokeWidth={2} className="w-5 h-5" /></button>
+                  </div>
 
                   {doctorsLoading ? (
-                    <div className="py-12 flex justify-center text-zinc-400"><Loader2 className="w-6 h-6 animate-spin" /></div>
+                    <div className="py-20 flex justify-center text-zinc-400"><Loader2 className="w-8 h-8 animate-spin" /></div>
                   ) : (
-                    <div className="space-y-2 mb-6 max-h-[280px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="space-y-3 mb-8 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
                       {doctors.map((doc) => {
                         const sel = selectedDoc === doc.id;
                         return (
                           <button key={doc.id} onClick={() => setDoc(doc.id)}
-                            className={`w-full p-3.5 rounded-xl border flex items-center gap-4 text-left transition-all ${sel ? 'border-emerald-500 bg-zinc-50 ring-1 ring-emerald-500' : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50'}`}>
+                            className={`w-full p-4 rounded-[24px] border-2 flex items-center gap-5 text-left transition-all group ${sel ? 'border-emerald-500 bg-emerald-50/30' : 'border-zinc-100 bg-white hover:border-zinc-200 hover:bg-zinc-50/50'}`}>
                             {doc.profileImageUrl ? (
-                              <img src={doc.profileImageUrl.startsWith('http') ? doc.profileImageUrl : `${BASE}${doc.profileImageUrl}`} alt={doc.fullName} className="w-10 h-10 rounded-full object-cover border border-zinc-200" />
+                              <img src={doc.profileImageUrl.startsWith('http') ? doc.profileImageUrl : `${BASE}${doc.profileImageUrl}`} alt={doc.fullName} className="w-14 h-14 rounded-2xl object-cover border-2 border-white shadow-sm" />
                             ) : (
-                              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[15px] font-medium ${sel ? 'bg-emerald-500 text-white' : 'bg-zinc-100 text-zinc-600'}`}>
+                              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-[18px] font-bold ${sel ? 'bg-emerald-500 text-white' : 'bg-zinc-100 text-zinc-400 group-hover:bg-white'}`}>
                                 {(doc.fullName || 'D').charAt(0)}
                               </div>
                             )}
                             <div className="flex-1 min-w-0">
-                              <div className={`text-[14px] font-medium truncate ${sel ? 'text-zinc-900' : 'text-zinc-800'}`}>{(doc.fullName || '').toLowerCase().startsWith('dr.') ? doc.fullName : `Dr. ${doc.fullName || doc.id}`}</div>
-                              <div className="text-[12px] text-zinc-500 truncate">{doc.specialization}</div>
+                              <div className={`text-[15px] font-bold truncate ${sel ? 'text-zinc-900' : 'text-zinc-800'}`}>{(doc.fullName || '').toLowerCase().startsWith('dr.') ? doc.fullName : `Dr. ${doc.fullName || doc.id}`}</div>
+                              <div className="text-[13px] text-zinc-500 font-medium truncate">{doc.specialization}</div>
                             </div>
                             <div className="text-right">
-                              {doc.consultationFee && <div className={`text-[14px] font-semibold ${sel ? 'text-zinc-900' : 'text-zinc-700'}`}>₹{doc.consultationFee}</div>}
+                              {doc.consultationFee && (
+                                <>
+                                  <div className={`text-[16px] font-bold ${sel ? 'text-emerald-700' : 'text-zinc-900'}`}>₹{doc.consultationFee}</div>
+                                  <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Fee</div>
+                                </>
+                              )}
                             </div>
                           </button>
                         );
                       })}
-                      {doctors.length === 0 && <p className="text-center text-[13px] text-zinc-500 py-8 border border-dashed border-zinc-200 rounded-xl">No specialists found in this department.</p>}
+                      {doctors.length === 0 && <EmptyState icon={<User className="w-10 h-10" />} title="No specialists found" description="Try selecting a different clinical department." />}
                     </div>
                   )}
 
                   <button onClick={() => selectedDoc && setStep(3)} disabled={!selectedDoc}
-                    className={`w-full py-2.5 rounded-xl text-[14px] font-medium transition-all flex items-center justify-center gap-2 ${selectedDoc ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>
-                    Continue <ArrowRight strokeWidth={2} className="w-4 h-4" />
+                    className={`w-full h-14 rounded-[18px] text-[15px] font-bold transition-all flex items-center justify-center gap-2 ${selectedDoc ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/20' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>
+                    Continue to Information <ArrowRight strokeWidth={3} className="w-4 h-4" />
                   </button>
                 </div>
               )}
@@ -325,29 +342,41 @@ function BookModal({ open, onClose, departments, token, isAuthenticated, initial
               {/* Step 3: Info */}
               {step === 3 && (
                 <div className="animate-in slide-in-from-right-4 fade-in duration-300">
-                  {!initialDocId && <button onClick={() => setStep(2)} className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-900 text-[13px] font-medium transition-colors mb-4"><ArrowLeft strokeWidth={2} className="w-3.5 h-3.5" /> Back</button>}
-                  <h3 className="text-[15px] font-semibold text-zinc-900 mb-1">Patient Information</h3>
-                  <p className="text-[13px] text-zinc-500 mb-5">Please verify the primary patient details.</p>
-
-                  <div className="space-y-4 mb-6">
+                  <div className="flex items-center justify-between mb-6">
                     <div>
-                      <label className="block text-[12px] font-medium text-zinc-700 mb-1.5 ml-0.5">Patient Full Name</label>
-                      <input type="text" value={patientName} onChange={e => setPatientName(e.target.value)} placeholder="e.g. John Doe"
-                        className="w-full px-3.5 py-2.5 bg-white border border-zinc-200 rounded-lg text-[14px] placeholder-zinc-400 focus:outline-none focus:border-zinc-400 focus:ring-4 focus:ring-zinc-100 transition-all shadow-sm"
-                      />
+                      <h3 className="text-[17px] font-bold text-zinc-900">Patient Information</h3>
+                      <p className="text-[14px] text-zinc-500 mt-1">Confirm the identity of the person visiting</p>
                     </div>
-                    <div>
-                      <label className="block text-[12px] font-medium text-zinc-700 mb-1.5 ml-0.5">Patient Age</label>
-                      <input type="number" value={patientAge} onChange={e => setPatientAge(e.target.value)} placeholder="Age in years"
-                        readOnly={!!user?.dateOfBirth}
-                        className={`w-full px-3.5 py-2.5 border border-zinc-200 rounded-lg text-[14px] placeholder-zinc-400 focus:outline-none focus:border-zinc-400 focus:ring-4 focus:ring-zinc-100 transition-all shadow-sm ${user?.dateOfBirth ? 'bg-zinc-50 text-zinc-500 cursor-not-allowed' : 'bg-white text-zinc-900'}`}
-                      />
+                    {!initialDocId && <button onClick={() => setStep(2)} className="w-10 h-10 rounded-full hover:bg-zinc-100 flex items-center justify-center text-zinc-400 transition-colors"><ArrowLeft strokeWidth={2} className="w-5 h-5" /></button>}
+                  </div>
+
+                  <div className="space-y-5 mb-8">
+                    <div className="p-5 bg-zinc-50 rounded-[24px] border border-zinc-100/50 space-y-5">
+                      <div>
+                        <label className="block text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-2 ml-1">Patient Full Name</label>
+                        <div className="relative">
+                          <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                          <input type="text" value={patientName} onChange={e => setPatientName(e.target.value)} placeholder="e.g. John Doe"
+                            className="w-full pl-11 pr-4 py-3.5 bg-white border border-zinc-200 rounded-xl text-[14px] font-bold text-zinc-900 placeholder-zinc-300 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-2 ml-1">Patient Age</label>
+                        <div className="relative">
+                          <Activity className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                          <input type="number" value={patientAge} onChange={e => setPatientAge(e.target.value)} placeholder="Age in years"
+                            readOnly={!!user?.dateOfBirth}
+                            className={`w-full pl-11 pr-4 py-3.5 border border-zinc-200 rounded-xl text-[14px] font-bold placeholder-zinc-300 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm ${user?.dateOfBirth ? 'bg-zinc-100 text-zinc-500 cursor-not-allowed' : 'bg-white text-zinc-900'}`}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                   <button onClick={() => (patientName && patientAge) && setStep(4)} disabled={!patientName || !patientAge}
-                    className={`w-full py-2.5 rounded-xl text-[14px] font-medium transition-all flex items-center justify-center gap-2 ${(patientName && patientAge) ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>
-                    Continue <ArrowRight strokeWidth={2} className="w-4 h-4" />
+                    className={`w-full h-14 rounded-[18px] text-[15px] font-bold transition-all flex items-center justify-center gap-2 ${(patientName && patientAge) ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/20' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>
+                    Continue to Schedule <ArrowRight strokeWidth={3} className="w-4 h-4" />
                   </button>
                 </div>
               )}
@@ -355,25 +384,32 @@ function BookModal({ open, onClose, departments, token, isAuthenticated, initial
               {/* Step 4: Schedule */}
               {step === 4 && (
                 <div className="animate-in slide-in-from-right-4 fade-in duration-300">
-                  <button onClick={() => setStep(3)} className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-900 text-[13px] font-medium transition-colors mb-4"><ArrowLeft strokeWidth={2} className="w-3.5 h-3.5" /> Back</button>
-                  <h3 className="text-[15px] font-semibold text-zinc-900 mb-1">Choose Date & Time</h3>
-                  <p className="text-[13px] text-zinc-500 mb-5">Select your preferred appointment slot.</p>
-
-                  <div className="space-y-4 mb-6">
+                  <div className="flex items-center justify-between mb-6">
                     <div>
-                      <label className="block text-[12px] font-medium text-zinc-700 mb-1.5 ml-0.5">Date</label>
-                      <input type="date" value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
-                        className="w-full px-3.5 py-2.5 bg-white border border-zinc-200 rounded-lg text-[14px] text-zinc-900 focus:outline-none focus:border-zinc-400 focus:ring-4 focus:ring-zinc-100 transition-all shadow-sm"
-                      />
+                      <h3 className="text-[17px] font-bold text-zinc-900">Visit Schedule</h3>
+                      <p className="text-[14px] text-zinc-500 mt-1">Pick a convenient date and time</p>
+                    </div>
+                    <button onClick={() => setStep(3)} className="w-10 h-10 rounded-full hover:bg-zinc-100 flex items-center justify-center text-zinc-400 transition-colors"><ArrowLeft strokeWidth={2} className="w-5 h-5" /></button>
+                  </div>
+
+                  <div className="space-y-6 mb-8">
+                    <div>
+                      <label className="block text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-2 ml-1">Appointment Date</label>
+                      <div className="relative">
+                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
+                          className="w-full pl-11 pr-4 py-3.5 bg-white border border-zinc-200 rounded-xl text-[14px] font-bold text-zinc-900 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm"
+                        />
+                      </div>
                     </div>
 
                     {date && (
-                      <div>
-                        <label className="block text-[12px] font-medium text-zinc-700 mb-1.5 ml-0.5">Available Slots</label>
+                      <div className="animate-in fade-in duration-500">
+                        <label className="block text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-2 ml-1">Available Slots</label>
                         {slotsLoading ? (
-                          <div className="py-6 flex justify-center text-zinc-400"><Loader2 className="w-5 h-5 animate-spin" /></div>
+                          <div className="py-10 flex justify-center text-zinc-400"><Loader2 className="w-6 h-6 animate-spin" /></div>
                         ) : (
-                          <div className="grid grid-cols-4 gap-2 max-h-[160px] overflow-y-auto pr-1">
+                          <div className="grid grid-cols-4 gap-2 max-h-[140px] overflow-y-auto pr-2 custom-scrollbar">
                             {slots.map(slotObj => {
                               const isBooked = typeof slotObj === 'string' ? slotObj.endsWith('::booked') : !slotObj.isAvailable;
                               const time = typeof slotObj === 'string' ? slotObj.replace('::booked', '') : slotObj.time;
@@ -383,33 +419,32 @@ function BookModal({ open, onClose, departments, token, isAuthenticated, initial
                                 <button
                                   key={typeof slotObj === 'string' ? slotObj : slotObj.time}
                                   onClick={() => { if (isBooked) return; setTime(time); }}
-                                  className={`relative py-2 px-1 rounded-lg text-[12px] font-medium transition-all border
-                                    ${isBooked ? 'bg-zinc-50 text-zinc-400 border-zinc-200 cursor-not-allowed opacity-60' :
-                                      isSelected ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm' :
-                                        'bg-white text-zinc-700 border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50'}
+                                  className={`relative py-2.5 rounded-xl text-[12px] font-bold transition-all border-2
+                                    ${isBooked ? 'bg-zinc-50 text-zinc-300 border-zinc-100 cursor-not-allowed' :
+                                      isSelected ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/20' :
+                                        'bg-white text-zinc-600 border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50'}
                                   `}>
                                   {time}
-                                  {isBooked && <span className="absolute bottom-0 right-0 left-0 text-[8px] uppercase font-bold text-zinc-400 translate-y-[-2px]">Booked</span>}
                                 </button>
                               );
                             })}
-                            {slots.length === 0 && <p className="col-span-4 text-center text-[12px] text-zinc-500 py-4 border border-dashed border-zinc-200 rounded-lg">No slots available for this date.</p>}
+                            {slots.length === 0 && <div className="col-span-4 p-5 text-center bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400 text-[12px] italic">No slots found for this date.</div>}
                           </div>
                         )}
                       </div>
                     )}
 
                     <div>
-                      <label className="block text-[12px] font-medium text-zinc-700 mb-1.5 ml-0.5">Chief Complaint <span className="text-zinc-400 font-normal">(optional)</span></label>
-                      <textarea value={complaint} onChange={e => setComplaint(e.target.value)} rows={2} placeholder="Briefly describe symptoms..."
-                        className="w-full px-3.5 py-2.5 bg-white border border-zinc-200 rounded-lg text-[14px] placeholder-zinc-400 focus:outline-none focus:border-zinc-400 focus:ring-4 focus:ring-zinc-100 transition-all shadow-sm resize-none"
+                      <label className="block text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-2 ml-1">Chief Complaint</label>
+                      <textarea value={complaint} onChange={e => setComplaint(e.target.value)} rows={2} placeholder="Describe symptoms or reason for visit..."
+                        className="w-full px-4 py-3.5 bg-white border border-zinc-200 rounded-xl text-[14px] font-medium text-zinc-900 placeholder-zinc-300 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm resize-none"
                       />
                     </div>
                   </div>
 
                   <button onClick={() => (date && selectedTime) && setStep(5)} disabled={!date || !selectedTime}
-                    className={`w-full py-2.5 rounded-xl text-[14px] font-medium transition-all flex items-center justify-center gap-2 ${(date && selectedTime) ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>
-                    Review Details <ArrowRight strokeWidth={2} className="w-4 h-4" />
+                    className={`w-full h-14 rounded-[18px] text-[15px] font-bold transition-all flex items-center justify-center gap-2 ${(date && selectedTime) ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/20' : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'}`}>
+                    Review Details <ArrowRight strokeWidth={3} className="w-4 h-4" />
                   </button>
                 </div>
               )}
@@ -417,36 +452,78 @@ function BookModal({ open, onClose, departments, token, isAuthenticated, initial
               {/* Step 5: Confirm */}
               {step === 5 && (
                 <div className="animate-in slide-in-from-right-4 fade-in duration-300">
-                  <button onClick={() => setStep(4)} className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-900 text-[13px] font-medium transition-colors mb-4"><ArrowLeft strokeWidth={2} className="w-3.5 h-3.5" /> Back</button>
-                  <h3 className="text-[15px] font-semibold text-zinc-900 mb-1">Confirm Appointment</h3>
-                  <p className="text-[13px] text-zinc-500 mb-5">Please double-check your appointment details before finalizing.</p>
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-[17px] font-bold text-zinc-900">Final Confirmation</h3>
+                    <button onClick={() => setStep(4)} className="w-10 h-10 rounded-full hover:bg-zinc-100 flex items-center justify-center text-zinc-400 transition-colors"><ArrowLeft strokeWidth={2} className="w-5 h-5" /></button>
+                  </div>
 
-                  <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 mb-6 space-y-3">
-                    {[
-                      { label: 'Patient', value: `${patientName} (${patientAge}y)` },
-                      { label: 'Consultant', value: (() => { const d = doctors.find(doc => doc.id === selectedDoc); return d ? (d.fullName.toLowerCase().startsWith('dr.') ? d.fullName : `Dr. ${d.fullName}`) : `Dr. #${selectedDoc}`; })() },
-                      { label: 'Consultation Fee', value: `₹${doctors.find(d => d.id === selectedDoc)?.consultationFee || '500'}`, highlight: true },
-                      { label: 'Date', value: date },
-                      { label: 'Time', value: selectedTime },
-                    ].map(item => (
-                      <div key={item.label} className="flex justify-between items-center text-[13px]">
-                        <span className="text-zinc-500 font-medium">{item.label}</span>
-                        <span className={`font-semibold ${item.highlight ? 'text-zinc-900' : 'text-zinc-800'}`}>{item.value}</span>
+                  <div className="relative overflow-hidden bg-white border-2 border-zinc-100 rounded-[32px] shadow-sm mb-8">
+                      {/* Decorative elements */}
+                      <div className="absolute top-1/2 -left-3 w-6 h-6 bg-zinc-50/50 rounded-full border-2 border-zinc-100 -translate-y-1/2" />
+                      <div className="absolute top-1/2 -right-3 w-6 h-6 bg-zinc-50/50 rounded-full border-2 border-zinc-100 -translate-y-1/2" />
+                      
+                      <div className="p-6 border-b border-dashed border-zinc-200 bg-zinc-50/30">
+                          <div className="flex items-center gap-4 mb-6">
+                              <div className="w-14 h-14 rounded-2xl bg-white border border-zinc-200 flex items-center justify-center text-emerald-500 shadow-sm overflow-hidden">
+                                  {(() => {
+                                    const d = doctors.find(doc => doc.id === selectedDoc);
+                                    return d?.profileImageUrl ? <img src={d.profileImageUrl.startsWith('http') ? d.profileImageUrl : `${BASE}${d.profileImageUrl}`} alt="" className="w-full h-full object-cover" /> : <User strokeWidth={2} className="w-6 h-6" />;
+                                  })()}
+                              </div>
+                              <div>
+                                  <p className="text-[16px] font-bold text-zinc-900">
+                                    {(() => { 
+                                      const d = doctors.find(doc => doc.id === selectedDoc); 
+                                      return d ? (d.fullName.toLowerCase().startsWith('dr.') ? d.fullName : `Dr. ${d.fullName}`) : 'Specialist'; 
+                                    })()}
+                                  </p>
+                                  <p className="text-[12px] text-zinc-500 font-bold uppercase tracking-wider">
+                                    {doctors.find(doc => doc.id === selectedDoc)?.specialization || 'Healthcare Provider'}
+                                  </p>
+                              </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-8">
+                              <div>
+                                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Schedule</p>
+                                  <div className="flex items-center gap-2 text-[14px] font-bold text-zinc-900">
+                                      <Calendar className="w-4 h-4 text-emerald-500" /> {date}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[14px] font-bold text-zinc-900 mt-1.5">
+                                      <Clock className="w-4 h-4 text-emerald-500" /> {selectedTime}
+                                  </div>
+                              </div>
+                              <div className="text-right">
+                                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Consultation Fee</p>
+                                  <p className="text-[28px] font-black text-zinc-900 leading-none">₹{doctors.find(d => d.id === selectedDoc)?.consultationFee || '500'}</p>
+                                  <p className="text-[11px] text-zinc-400 font-bold mt-2 uppercase tracking-tight">Per Visit</p>
+                              </div>
+                          </div>
                       </div>
-                    ))}
+
+                      <div className="p-6">
+                          <div className="flex items-start gap-3">
+                              <div className="mt-1 bg-zinc-100 p-1.5 rounded-lg text-zinc-400"><Activity className="w-3.5 h-3.5" /></div>
+                              <div>
+                                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Clinical Note</p>
+                                  <p className="text-[13px] text-zinc-600 font-bold leading-relaxed italic">"{complaint || 'General Checkup & Routine Health Screening'}"</p>
+                              </div>
+                          </div>
+                      </div>
                   </div>
 
                   {error && (
-                    <div className="p-3 bg-red-50 border border-red-100 text-red-600 rounded-lg text-[13px] flex items-center gap-2 mb-5">
-                      <AlertCircle strokeWidth={2} className="w-4 h-4 flex-shrink-0" /> <span className="leading-tight">{error}</span>
+                    <div className="p-4 bg-red-50 border-2 border-red-100 text-red-700 rounded-2xl text-[13px] flex items-center gap-3 mb-6 animate-in shake duration-300">
+                      <AlertCircle strokeWidth={2.5} className="w-5 h-5 flex-shrink-0" /> <span className="font-bold leading-tight">{error}</span>
                     </div>
                   )}
 
                   <button onClick={handleSubmit} disabled={submitting}
-                    className={`w-full py-2.5 rounded-xl text-[14px] font-medium transition-all flex items-center justify-center gap-2 ${submitting ? 'bg-zinc-800 text-zinc-200 cursor-wait' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}>
-                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <div className="w-4" />}
-                    {submitting ? 'Processing...' : isAuthenticated ? 'Confirm Booking' : 'Login Required'}
+                    className={`w-full h-14 rounded-[20px] text-[15px] font-bold transition-all flex items-center justify-center gap-2 ${submitting ? 'bg-zinc-900 text-white cursor-wait' : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/20'}`}>
+                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <div className="w-5" />}
+                    {submitting ? 'Finalizing Your Slot...' : isAuthenticated ? 'Finalize Booking' : 'Login to Book'}
                   </button>
+                  <p className="text-center text-[11px] text-zinc-400 font-bold mt-4 uppercase tracking-tighter opacity-60">Verified Secure Medical Interface</p>
                 </div>
               )}
             </div>
@@ -472,56 +549,69 @@ function DoctorDetailsModal({ open, onClose, doctor, onBook }: DoctorDetailsModa
 
   return (
     <div className="fixed inset-0 z-[9999] bg-zinc-900/60 backdrop-blur-sm overflow-y-auto p-4 sm:p-6 md:p-12 flex justify-center items-start animate-in fade-in duration-200" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-[32px] w-full max-w-[500px] shadow-2xl overflow-hidden relative mt-8 sm:mt-12 animate-in zoom-in-95 duration-200">
-        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/80 backdrop-blur shadow-sm hover:bg-zinc-100 flex items-center justify-center text-zinc-500 transition-colors z-10">
+      <div className="bg-white rounded-[40px] w-full max-w-[540px] shadow-2xl overflow-hidden relative mt-8 sm:mt-12 animate-in zoom-in-95 duration-200">
+        <button onClick={onClose} className="absolute top-6 right-6 w-11 h-11 rounded-full bg-white/90 backdrop-blur shadow-md hover:bg-zinc-100 flex items-center justify-center text-zinc-500 transition-colors z-10 border border-zinc-100">
           <X strokeWidth={2} className="w-5 h-5" />
         </button>
 
-        <div className="relative h-64 bg-emerald-50">
+        <div className="relative h-72 bg-emerald-50">
            {doctor.profileImageUrl ? (
              <img src={doctor.profileImageUrl.startsWith('http') ? doctor.profileImageUrl : `${BASE}${doctor.profileImageUrl}`} className="w-full h-full object-cover object-top" alt={doctor.fullName} />
            ) : (
-             <div className="w-full h-full flex items-center justify-center text-6xl font-bold text-emerald-200 bg-emerald-50">{(doctor.fullName||'D')[0]}</div>
+             <div className="w-full h-full flex items-center justify-center text-8xl font-black text-emerald-200/50 bg-emerald-50/50">{(doctor.fullName||'D')[0]}</div>
            )}
-           <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent"></div>
+           <div className="absolute inset-0 bg-gradient-to-t from-white via-white/20 to-transparent"></div>
+
+           <div className="absolute bottom-6 left-8 flex gap-2">
+              <div className="px-3 py-1.5 rounded-xl bg-white/90 backdrop-blur border border-zinc-100 shadow-sm text-[11px] font-bold text-emerald-600 uppercase tracking-wider flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" /> {doctor.isAvailable ? 'Verified Specialist' : 'Out of Office'}
+              </div>
+           </div>
         </div>
 
-        <div className="px-8 pb-10 -mt-12 relative z-10">
-           <div className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-500 text-white text-[11px] font-bold uppercase tracking-wider mb-4 shadow-lg shadow-emerald-500/20">
-             {doctor.isAvailable ? 'Available Now' : 'Not Available'}
-           </div>
-           
-           <h2 className="text-[28px] font-bold text-zinc-900 leading-tight mb-1">{(doctor.fullName || '').toLowerCase().startsWith('dr.') ? doctor.fullName : `Dr. ${doctor.fullName}`}</h2>
-           <p className="text-emerald-600 font-semibold text-[15px] mb-6">{doctor.specialization}</p>
+        <div className="px-10 pb-12 pt-4 relative z-10">
+           <h2 className="text-[32px] font-black text-zinc-900 leading-tight mb-1 tracking-tight">{(doctor.fullName || '').toLowerCase().startsWith('dr.') ? doctor.fullName : `Dr. ${doctor.fullName}`}</h2>
+           <p className="text-emerald-600 font-bold text-[17px] mb-8">{doctor.specialization}</p>
 
-           <div className="grid grid-cols-2 gap-4 mb-8">
-              <div className="bg-zinc-50 rounded-2xl p-4 border border-zinc-100">
-                 <span className="text-[11px] font-bold text-zinc-400 block mb-1 uppercase tracking-tight">Qualification</span>
-                 <span className="text-[14px] font-bold text-zinc-700">{doctor.qualification || 'MBBS, MD'}</span>
+           <div className="grid grid-cols-2 gap-5 mb-10">
+              <div className="bg-zinc-50/50 rounded-2xl p-5 border border-zinc-100">
+                 <span className="text-[10px] font-bold text-zinc-400 block mb-2 uppercase tracking-widest">Medical Degree</span>
+                 <span className="text-[15px] font-bold text-zinc-800">{doctor.qualification || 'MBBS, MD (Gold Medal)'}</span>
               </div>
-              <div className="bg-zinc-50 rounded-2xl p-4 border border-zinc-100">
-                 <span className="text-[11px] font-bold text-zinc-400 block mb-1 uppercase tracking-tight">Consultation Fee</span>
-                 <span className="text-[14px] font-bold text-zinc-700">₹{doctor.consultationFee || '500'}</span>
+              <div className="bg-zinc-50/50 rounded-2xl p-5 border border-zinc-100">
+                 <span className="text-[10px] font-bold text-zinc-400 block mb-2 uppercase tracking-widest">Consultation Fee</span>
+                 <span className="text-[18px] font-black text-zinc-900">₹{doctor.consultationFee || '500'}</span>
               </div>
            </div>
 
-           <div className="mb-8">
-              <h4 className="text-[14px] font-bold text-zinc-900 mb-2">About Doctor</h4>
-              <p className="text-[14px] text-zinc-500 leading-relaxed">
-                 {((doctor.fullName || '').toLowerCase().startsWith('dr.') ? doctor.fullName : `Dr. ${doctor.fullName}`)} is an esteemed {doctor.specialization.toLowerCase()} with extensive experience in clinical practice. 
-                 Dedicated to providing compassionate care and utilizing the latest medical advancements to ensure the best outcomes for patients.
-              </p>
+           <div className="space-y-6 mb-10">
+              <div className="flex items-start gap-4">
+                 <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500 shrink-0"><Stethoscope className="w-5 h-5" /></div>
+                 <div>
+                    <h4 className="text-[14px] font-bold text-zinc-900 mb-1">Clinical Experience</h4>
+                    <p className="text-[13px] text-zinc-500 font-medium leading-relaxed">Dedicated specialist with over 10 years of experience in tertiary healthcare management and patient-centric clinical protocols.</p>
+                 </div>
+              </div>
+              <div className="flex items-start gap-4">
+                 <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0"><Clock className="w-5 h-5" /></div>
+                 <div>
+                    <h4 className="text-[14px] font-bold text-zinc-900 mb-1">Consultation Hours</h4>
+                    <p className="text-[13px] text-zinc-500 font-medium leading-relaxed">Mon - Sat (09:00 AM - 05:00 PM). Emergency on-call support available for admitted subjects.</p>
+                 </div>
+              </div>
            </div>
 
-           <button onClick={() => { onClose(); onBook(doctor.departmentId || 0, doctor.id); }} className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full text-[15px] font-bold shadow-xl shadow-emerald-500/20 transition-all transform hover:-translate-y-0.5 active:scale-95">
-              Book Appointment Now
-           </button>
+           <Button size="lg" className="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-500/20 text-[16px] font-bold transition-all transform hover:-translate-y-0.5 active:translate-y-0" 
+             onClick={() => onBook(doctor.departmentId || 0, doctor.id)}>
+             Schedule Visit with Dr. {(doctor.fullName || '').split(' ').pop()}
+           </Button>
+
+           <p className="text-center text-[11px] text-zinc-400 font-bold mt-5 uppercase tracking-widest opacity-60">GOMEDIC Premium Healthcare Network</p>
         </div>
       </div>
     </div>
   );
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 //  DATA HOOK
 // ─────────────────────────────────────────────────────────────────────────────
@@ -620,6 +710,31 @@ const Home: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [scrolled, setScrolled] = useState(false);
 
+  // Inquiry form states
+  const [inquiryName, setInquiryName] = useState('');
+  const [inquiryEmail, setInquiryEmail] = useState('');
+  const [inquiryType, setInquiryType] = useState('General Inquiry');
+  const [inquiryMessage, setInquiryMessage] = useState('');
+  const [inquiryLoading, setInquiryLoading] = useState(false);
+  const [inquirySuccess, setInquirySuccess] = useState(false);
+  const [inquiryError, setInquiryError] = useState('');
+
+  // Map state & geolocation
+  const [mapUrl, setMapUrl] = useState("https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3022.428453473181!2d-73.9857!3d40.7484!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNDDCsDQ0JzU0LjIiTiA3M8KwNTknMDguNSJX!5e0!3m2!1sen!2sus!4v1714480000000!5m2!1sen!2sus");
+
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          setMapUrl(`https://maps.google.com/maps?q=${latitude},${longitude}&z=15&output=embed`);
+        },
+        (err) => console.warn("Map Geolocation:", err.message),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+  }, []);
+
   const { stats, departments, doctors, availBeds, loading } = useLiveData(token);
 
   useEffect(() => {
@@ -692,6 +807,42 @@ const Home: React.FC = () => {
   const openDetails = (doc: Doctor) => {
     setSelectedDocForDetail(doc);
     setDetailOpen(true);
+  };
+
+  const handleInquirySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inquiryEmail || !inquiryMessage) {
+      setInquiryError('Please fill in required fields.');
+      return;
+    }
+
+    setInquiryLoading(true);
+    setInquiryError('');
+    try {
+      const res = await fetch(`${BASE}/api/auth/inquiry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: inquiryName,
+          email: inquiryEmail,
+          inquiryType: inquiryType,
+          message: inquiryMessage
+        }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to send inquiry');
+      }
+      setInquirySuccess(true);
+      setInquiryName('');
+      setInquiryEmail('');
+      setInquiryMessage('');
+      setTimeout(() => setInquirySuccess(false), 5000);
+    } catch (err: any) {
+      setInquiryError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setInquiryLoading(false);
+    }
   };
 
   const getRoleRoute = () => {
@@ -857,50 +1008,146 @@ const Home: React.FC = () => {
          </div>
       </section>
 
-      {/* ── CONTACT US ───────────────────────────────────── */}
-      <section id="contact" className="bg-[#F8FAFC]">
-         <div className="max-w-[1400px] mx-auto px-6 py-24 flex flex-col items-center">
-            <h2 className="text-[60px] md:text-[100px] font-black text-zinc-900 tracking-tighter leading-none mb-12">Contact US</h2>
-            
-            <div className="w-full max-w-4xl grid md:grid-cols-2 gap-12 text-left">
-               <div>
-                  <h4 className="font-semibold text-zinc-900 mb-2">Manhattan, New York</h4>
-                  <p className="text-[14px] text-zinc-500 mb-8">2023</p>
-                  
-                  <h4 className="font-semibold text-zinc-900 mb-2">Office Hours</h4>
-                  <p className="text-[14px] text-zinc-500 mb-1">Monday - Friday</p>
-                  <p className="text-[14px] text-zinc-500">11 AM - 2 PM</p>
-               </div>
+      {/* ── CONTACT US (Inquiry Section) ────────────────────── */}
+      <section id="contact" className="bg-white py-24 border-t border-zinc-100">
+         <div className="max-w-[1400px] mx-auto px-6">
+            <div className="flex flex-col md:flex-row gap-16">
                
-               <form className="space-y-4">
-                  <div>
-                    <label className="text-[12px] font-semibold text-zinc-900 mb-1 block">Name (required)</label>
-                    <div className="flex gap-3">
-                       <input type="text" placeholder="First Name" className="flex-1 p-3 bg-white border border-zinc-200 rounded-lg text-[13px]" />
-                       <input type="text" placeholder="Last Name" className="flex-1 p-3 bg-white border border-zinc-200 rounded-lg text-[13px]" />
+               {/* Contact Info & Map */}
+               <div className="flex-1">
+                  <div className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[12px] font-bold uppercase tracking-wider mb-6">
+                     Get In Touch
+                  </div>
+                  <h2 className="text-4xl md:text-5xl font-bold text-zinc-900 tracking-tight mb-8">
+                     We're here to help you <br/> and your family.
+                  </h2>
+                  
+                  <div className="space-y-8 mb-10">
+                     <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-zinc-50 flex items-center justify-center text-emerald-500 flex-shrink-0 border border-zinc-100">
+                           <MapPin strokeWidth={1.5} className="w-6 h-6" />
+                        </div>
+                        <div>
+                           <h4 className="font-bold text-zinc-900 text-[16px] mb-1">Our Location</h4>
+                           <p className="text-zinc-500 text-[14px] leading-relaxed">
+                              HealthBridge Medical Center<br/>
+                              123 Healthcare Ave, Manhattan<br/>
+                              New York, NY 10001
+                           </p>
+                        </div>
+                     </div>
+                     
+                     <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-zinc-50 flex items-center justify-center text-emerald-500 flex-shrink-0 border border-zinc-100">
+                           <Phone strokeWidth={1.5} className="w-6 h-6" />
+                        </div>
+                        <div>
+                           <h4 className="font-bold text-zinc-900 text-[16px] mb-1">Emergency Call</h4>
+                           <p className="text-emerald-600 text-[18px] font-bold">+1 (555) 000-9999</p>
+                           <p className="text-zinc-400 text-[12px]">Available 24/7 for medical emergencies</p>
+                        </div>
+                     </div>
+
+                     <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-zinc-50 flex items-center justify-center text-emerald-500 flex-shrink-0 border border-zinc-100">
+                           <Mail strokeWidth={1.5} className="w-6 h-6" />
+                        </div>
+                        <div>
+                           <h4 className="font-bold text-zinc-900 text-[16px] mb-1">Email Inquiry</h4>
+                           <p className="text-zinc-500 text-[14px]">support@gomedic.com</p>
+                           <p className="text-zinc-500 text-[14px]">appointments@gomedic.com</p>
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Interactive Map Interface */}
+                  <div className="w-full h-64 bg-zinc-50 rounded-[24px] overflow-hidden border border-zinc-200 relative shadow-sm group">
+                     <iframe 
+                       title="Hospital Location"
+                       src={mapUrl} 
+                       width="100%" 
+                       height="100%" 
+                       style={{ border: 0 }} 
+                       allowFullScreen 
+                       loading="lazy" 
+                       referrerPolicy="no-referrer-when-downgrade"
+                       className="grayscale-[0.2] contrast-[0.9] hover:grayscale-0 transition-all duration-700"
+                     />
+                  </div>               </div>
+
+               {/* Inquiry Form */}
+               <div className="flex-1 bg-zinc-50 border border-zinc-100 rounded-[32px] p-8 md:p-10 shadow-sm">
+                  <div className="mb-8">
+                     <h3 className="text-2xl font-bold text-zinc-900 mb-2">Send an Inquiry</h3>
+                     <p className="text-zinc-500 text-[14px]">Have a question? Our administration team will get back to you within 24 hours.</p>
+                  </div>
+                  
+                  {inquirySuccess ? (
+                    <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-2xl text-center animate-in zoom-in-95 duration-300">
+                       <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white mx-auto mb-4">
+                          <CheckCircle2 className="w-6 h-6" />
+                       </div>
+                       <h4 className="text-[18px] font-bold text-zinc-900 mb-1">Message Sent!</h4>
+                       <p className="text-zinc-500 text-[14px]">Thank you for reaching out. We will contact you soon.</p>
                     </div>
-                  </div>
-                  <div>
-                    <label className="text-[12px] font-semibold text-zinc-900 mb-1 block">Services</label>
-                    <select className="w-full p-3 bg-white border border-zinc-200 rounded-lg text-[13px] text-zinc-500 appearance-none">
-                       <option>Select a service</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[12px] font-semibold text-zinc-900 mb-1 block">Email (required)</label>
-                    <input type="email" className="w-full p-3 bg-white border border-zinc-200 rounded-lg text-[13px] mb-2" />
-                    <label className="flex items-center gap-2 text-[12px] text-zinc-500">
-                       <input type="checkbox" className="w-3 h-3 accent-emerald-500" /> Sign up for news and updates.
-                    </label>
-                  </div>
-                  <div>
-                    <label className="text-[12px] font-semibold text-zinc-900 mb-1 block">Project description</label>
-                    <textarea rows={3} className="w-full p-3 bg-white border border-zinc-200 rounded-lg text-[13px] resize-none"></textarea>
-                  </div>
-                  <button type="button" className="px-8 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full text-[14px] font-bold mt-2">
-                     Submit
-                  </button>
-               </form>
+                  ) : (
+                    <form className="space-y-5" onSubmit={handleInquirySubmit}>
+                       <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                             <label className="text-[12px] font-bold text-zinc-700 ml-1">Full Name</label>
+                             <input type="text" value={inquiryName} onChange={(e) => setInquiryName(e.target.value)} placeholder="John Doe" className="w-full p-3.5 bg-white border border-zinc-200 rounded-xl text-[14px] focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 transition-all shadow-sm" />
+                          </div>
+                          <div className="space-y-1.5">
+                             <label className="text-[12px] font-bold text-zinc-700 ml-1">Email Address</label>
+                             <input type="email" required value={inquiryEmail} onChange={(e) => setInquiryEmail(e.target.value)} placeholder="john@example.com" className="w-full p-3.5 bg-white border border-zinc-200 rounded-xl text-[14px] focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 transition-all shadow-sm" />
+                          </div>
+                       </div>
+
+                       <div className="space-y-1.5">
+                          <label className="text-[12px] font-bold text-zinc-700 ml-1">Inquiry Type</label>
+                          <select value={inquiryType} onChange={(e) => setInquiryType(e.target.value)} className="w-full p-3.5 bg-white border border-zinc-200 rounded-xl text-[14px] text-zinc-600 focus:outline-none focus:border-emerald-500 transition-all shadow-sm appearance-none cursor-pointer">
+                             <option>General Inquiry</option>
+                             <option>Appointment Request</option>
+                             <option>Billing & Insurance</option>
+                             <option>Lab Results Query</option>
+                             <option>Feedback & Suggestions</option>
+                          </select>
+                       </div>
+
+                       <div className="space-y-1.5">
+                          <label className="text-[12px] font-bold text-zinc-700 ml-1">Your Message</label>
+                          <textarea required rows={4} value={inquiryMessage} onChange={(e) => setInquiryMessage(e.target.value)} placeholder="How can we assist you today?" className="w-full p-3.5 bg-white border border-zinc-200 rounded-xl text-[14px] focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 transition-all shadow-sm resize-none"></textarea>
+                       </div>
+
+                       {inquiryError && (
+                          <p className="text-red-500 text-[12px] font-medium ml-1">{inquiryError}</p>
+                       )}
+
+                       <button type="submit" disabled={inquiryLoading} className={`w-full py-4 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-[15px] font-bold transition-all shadow-lg flex items-center justify-center gap-2 group ${inquiryLoading ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                          {inquiryLoading ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <>
+                              Send Message
+                              <ArrowRight strokeWidth={2} className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                            </>
+                          )}
+                       </button>
+                       
+                       <div className="pt-4 flex items-center gap-3 text-zinc-400">
+                          <div className="h-[1px] flex-1 bg-zinc-200"></div>
+                          <span className="text-[11px] font-bold uppercase tracking-widest">or</span>
+                          <div className="h-[1px] flex-1 bg-zinc-200"></div>
+                       </div>
+                       
+                       <div className="text-center">
+                          <p className="text-[13px] text-zinc-500 mb-1">Need immediate support?</p>
+                          <button type="button" onClick={() => isAuth ? navigate('/dashboard') : navigate('/login')} className="text-emerald-600 text-[14px] font-bold hover:underline">Chat with our Receptionist online</button>
+                       </div>
+                    </form>
+                  )}
+               </div>
+
             </div>
          </div>
       </section>
