@@ -70,6 +70,7 @@ export const doctorApi = {
   getMe: () => api.get('/api/doctors/me'),
   getSchedules: (doctorId: number) => api.get(`/api/doctors/${doctorId}/schedules`),
   addSchedule: (doctorId: number, data: any) => api.post(`/api/doctors/${doctorId}/schedules`, data),
+  updateSchedule: (scheduleId: number, data: any) => api.put(`/api/doctors/schedules/${scheduleId}`, data),
   deleteSchedule: (scheduleId: number) => api.delete(`/api/doctors/schedules/${scheduleId}`),
   getAvailableSlots: (doctorId: number, date: string) => api.get(`/api/appointments/slots/${doctorId}?date=${date}`),
   updateProfilePicture: (imageUrl: string) => api.patch('/api/doctors/profile-picture', { imageUrl }),

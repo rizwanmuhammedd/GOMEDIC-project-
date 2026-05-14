@@ -6,11 +6,12 @@ import {
   Clock,
   Plus,
   Trash2,
+  Edit2,
   Loader2,
   AlertCircle,
   CalendarDays
 } from 'lucide-react';
-import { PageHeader, Card, Button, Input, Select, EmptyState, Badge } from '../components/ui';
+import { PageHeader, Card, Button, Input, Select, EmptyState, Badge, Modal } from '../components/ui';
 
 interface Schedule {
   id: number;
@@ -40,6 +41,17 @@ const DoctorSchedulePage: React.FC = () => {
   const [isLeave, setIsLeave] = useState(false);
   const [leaveReason, setLeaveReason] = useState('');
 
+  // Edit State
+  const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
+  const [editForm, setEditForm] = useState({
+    scheduleDate: '',
+    shiftType: 'Morning',
+    shiftStart: '09:00',
+    shiftEnd: '13:00',
+    isLeave: false,
+    leaveReason: ''
+  });
+
   useEffect(() => {
     fetchMyProfileAndSchedules();
   }, []);
@@ -57,6 +69,15 @@ const DoctorSchedulePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const convertTo24h = (timeStr: string) => {
+    if (!timeStr) return "09:00";
+    const [time, modifier] = timeStr.split(' ');
+    let [hours, minutes] = time.split(':');
+    if (hours === '12') hours = '00';
+    if (modifier === 'PM') hours = (parseInt(hours, 10) + 12).toString();
+    return `${hours.padStart(2, '0')}:${minutes}`;
   };
 
   const handleUpdateDuration = async (val: number) => {
@@ -94,6 +115,39 @@ const DoctorSchedulePage: React.FC = () => {
       setIsLeave(false);
     } catch (err: any) {
       addToast({ type: 'error', title: 'Error', message: err.response?.data?.message || 'Failed to add schedule' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditClick = (s: Schedule) => {
+    setEditingSchedule(s);
+    setEditForm({
+      scheduleDate: s.scheduleDate,
+      shiftType: s.shiftType,
+      shiftStart: convertTo24h(s.shiftStart),
+      shiftEnd: convertTo24h(s.shiftEnd),
+      isLeave: s.isLeave,
+      leaveReason: s.leaveReason || ''
+    });
+  };
+
+  const handleUpdateSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSchedule) return;
+
+    setSubmitting(true);
+    try {
+      await doctorApi.updateSchedule(editingSchedule.id, editForm);
+      addToast({ 
+        type: 'success', 
+        title: 'Schedule Updated', 
+        message: 'Schedule changes saved. Affected patients will be notified.' 
+      });
+      setEditingSchedule(null);
+      fetchMyProfileAndSchedules();
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Update Failed', message: err.response?.data?.message || 'Could not update schedule' });
     } finally {
       setSubmitting(false);
     }
@@ -263,12 +317,20 @@ const DoctorSchedulePage: React.FC = () => {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleDelete(s.id)}
-                      className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 flex items-center justify-center border border-transparent hover:border-red-200"
-                    >
-                      <Trash2 strokeWidth={2} className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleEditClick(s)}
+                        className="p-2 text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all flex items-center justify-center border border-transparent hover:border-emerald-200"
+                      >
+                        <Edit2 strokeWidth={2} className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(s.id)}
+                        className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex items-center justify-center border border-transparent hover:border-red-200"
+                      >
+                        <Trash2 strokeWidth={2} className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -284,8 +346,92 @@ const DoctorSchedulePage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Edit Modal */}
+      <Modal
+        isOpen={!!editingSchedule}
+        onClose={() => setEditingSchedule(null)}
+        title="Edit Schedule Slot"
+      >
+        <form onSubmit={handleUpdateSchedule} className="space-y-5">
+          <Input
+            label="Active Date"
+            type="date"
+            value={editForm.scheduleDate}
+            onChange={(e: any) => setEditForm({...editForm, scheduleDate: e.target.value})}
+            required
+          />
+
+          <Select
+            label="Working Shift Type"
+            value={editForm.shiftType}
+            onChange={(e: any) => setEditForm({...editForm, shiftType: e.target.value})}
+            options={[
+              { value: 'Morning', label: 'Morning' },
+              { value: 'Afternoon', label: 'Afternoon' },
+              { value: 'Evening', label: 'Evening' },
+              { value: 'Night', label: 'Night' }
+            ]}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Start Time"
+              type="time"
+              value={editForm.shiftStart}
+              onChange={(e: any) => setEditForm({...editForm, shiftStart: e.target.value})}
+              required
+            />
+            <Input
+              label="End Time"
+              type="time"
+              value={editForm.shiftEnd}
+              onChange={(e: any) => setEditForm({...editForm, shiftEnd: e.target.value})}
+              required
+            />
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <input
+              type="checkbox"
+              id="edit_isLeave"
+              checked={editForm.isLeave}
+              onChange={e => setEditForm({...editForm, isLeave: e.target.checked})}
+              className="w-4 h-4 text-zinc-900 rounded border-zinc-300 focus:ring-emerald-500"
+            />
+            <label htmlFor="edit_isLeave" className="text-[13px] font-semibold text-zinc-700">Mark as Leave/Offline</label>
+          </div>
+
+          {editForm.isLeave && (
+            <Input
+              label="Leave Reason"
+              type="text"
+              value={editForm.leaveReason}
+              onChange={(e: any) => setEditForm({...editForm, leaveReason: e.target.value})}
+              placeholder="Vacation, Conference, etc."
+            />
+          )}
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setEditingSchedule(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              loading={submitting}
+            >
+              Update Schedule
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
 
 export default DoctorSchedulePage;
+

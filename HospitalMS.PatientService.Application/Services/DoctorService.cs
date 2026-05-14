@@ -202,6 +202,11 @@ public class DoctorService : IDoctorService
         var existing = await _scheduleRepo.GetByIdAsync(scheduleId) 
             ?? throw new Exception("Schedule not found");
 
+        var oldDate = existing.ScheduleDate;
+        var oldIsLeave = existing.IsLeave;
+        var oldStart = existing.ShiftStart;
+        var oldEnd = existing.ShiftEnd;
+
         existing.ScheduleDate = DateOnly.Parse(dto.ScheduleDate);
         existing.ShiftType = dto.ShiftType;
         existing.ShiftStart = TimeOnly.Parse(dto.ShiftStart);
@@ -210,6 +215,59 @@ public class DoctorService : IDoctorService
         existing.LeaveReason = dto.LeaveReason;
 
         await _scheduleRepo.UpdateAsync(existing);
+
+        // Notify affected patients
+        try 
+        {
+            var appointments = await _appointmentRepo.GetByDoctorAndDateAsync(existing.DoctorId, oldDate);
+            var activeAppts = appointments.Where(a => a.Status == "Scheduled").ToList();
+            
+            if (activeAppts.Any())
+            {
+                var doctor = await _repository.GetByIdAsync(existing.DoctorId);
+                if (existing.IsLeave)
+                {
+                    await NotifyPatients(activeAppts, $"Dr. {doctor?.FullName} is on leave on {existing.ScheduleDate:yyyy-MM-dd}. Please contact support to reschedule.");
+                }
+                else if (existing.ShiftStart != oldStart || existing.ShiftEnd != oldEnd || existing.ScheduleDate != oldDate)
+                {
+                    // Find appointments that fall outside the new window
+                    var affected = activeAppts.Where(a => 
+                        a.AppointmentDate != existing.ScheduleDate ||
+                        a.AppointmentTime < existing.ShiftStart || 
+                        a.AppointmentTime >= existing.ShiftEnd
+                    ).ToList();
+
+                    if (affected.Any())
+                    {
+                        await NotifyPatients(affected, $"Dr. {doctor?.FullName} updated their schedule for {oldDate:yyyy-MM-dd}. Your appointment time may no longer be valid.");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Notification error: {ex.Message}");
+        }
+    }
+
+    private async Task NotifyPatients(List<Appointment> appointments, string message)
+    {
+        var client = _httpClientFactory.CreateClient();
+        foreach (var appt in appointments)
+        {
+            try
+            {
+                await client.PostAsJsonAsync("http://localhost:5004/api/notifications", new
+                {
+                    UserId = appt.PatientId,
+                    Title = "🗓 Appointment Schedule Update",
+                    Message = message,
+                    Type = "warning"
+                });
+            }
+            catch { /* ignore */ }
+        }
     }
 
     public async Task DeleteScheduleAsync(int scheduleId)
