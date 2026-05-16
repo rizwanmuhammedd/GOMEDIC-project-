@@ -7,6 +7,7 @@ public interface IAppointmentService
     Task<List<AppointmentResponseDto>> GetAllAsync();
     Task<AppointmentResponseDto?> GetByIdAsync(int id);
     Task<List<AppointmentResponseDto>> GetMyAppointmentsAsync(int patientId);
+    Task<List<AppointmentResponseDto>> GetByPatientIdAsync(int patientId);
     Task<List<AppointmentResponseDto>> GetDoctorAppointmentsAsync(int doctorId);
     Task<List<AppointmentResponseDto>> GetByDoctorUserIdAsync(int userId);
     Task<AppointmentResponseDto> BookAsync(int patientId, BookAppointmentDto dto);

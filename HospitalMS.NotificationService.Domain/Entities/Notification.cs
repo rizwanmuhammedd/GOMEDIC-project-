@@ -22,6 +22,8 @@ public partial class Notification
 
     public string? RelatedEntityType { get; set; }
 
+    public string? TargetUrl { get; set; }
+
     public DateTime SentAt { get; set; }
 
     public DateTime? ReadAt { get; set; }

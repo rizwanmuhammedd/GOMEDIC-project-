@@ -21,7 +21,7 @@ public class NotificationService : INotificationService
     }
 
     // Called by OTHER services to create + send live notification
-    public async Task SendAsync(int userId, string title, string message, string type, int? relatedId = null, string? relatedType = null)
+    public async Task SendAsync(int userId, string title, string message, string type, int? relatedId = null, string? relatedType = null, string? targetUrl = null)
     {
         // 1. Save to DB
         var notification = new Notification
@@ -34,7 +34,8 @@ public class NotificationService : INotificationService
             IsRead = false,
             SentAt = DateTime.UtcNow,
             RelatedEntityId = relatedId,
-            RelatedEntityType = relatedType
+            RelatedEntityType = relatedType,
+            TargetUrl = targetUrl
         };
         await _repo.AddAsync(notification);
 
@@ -47,11 +48,12 @@ public class NotificationService : INotificationService
                 notification.Type,
                 notification.SentAt,
                 notification.RelatedEntityId,
-                notification.RelatedEntityType
+                notification.RelatedEntityType,
+                notification.TargetUrl
             });
     }
 
-    public async Task SendToRoleAsync(string role, string title, string message, string type, int? relatedId = null, string? relatedType = null)
+    public async Task SendToRoleAsync(string role, string title, string message, string type, int? relatedId = null, string? relatedType = null, string? targetUrl = null)
     {
         // 1. Get all users with that role from AuthService
         try
@@ -70,7 +72,7 @@ public class NotificationService : INotificationService
                         if (user.TryGetProperty("id", out var idProp) || user.TryGetProperty("Id", out idProp))
                         {
                             int userId = idProp.GetInt32();
-                            await SendAsync(userId, title, message, type, relatedId, relatedType);
+                            await SendAsync(userId, title, message, type, relatedId, relatedType, targetUrl);
                         }
                     }
                 }

@@ -46,6 +46,12 @@ public class AppointmentService : IAppointmentService
         return await PopulatePatientDetailsAsync(list.Select(MapToDto).ToList());
     }
 
+    public async Task<List<AppointmentResponseDto>> GetByPatientIdAsync(int patientId)
+    {
+        var list = await _repository.GetByPatientIdAsync(patientId);
+        return await PopulatePatientDetailsAsync(list.Select(MapToDto).ToList());
+    }
+
     public async Task<List<AppointmentResponseDto>> GetDoctorAppointmentsAsync(int doctorId)
     {
         var list = await _repository.GetByDoctorIdAsync(doctorId);
@@ -110,45 +116,56 @@ public class AppointmentService : IAppointmentService
         if (doctor == null) throw new Exception("Doctor not found");
         if (!doctor.IsAvailable) throw new Exception("Doctor is not currently available");
 
+        // Parse Date and Time from string
+        if (!DateOnly.TryParse(dto.AppointmentDate, out var appointmentDate))
+            throw new Exception("Invalid date format. Expected YYYY-MM-DD.");
+
+        if (!TimeOnly.TryParse(dto.AppointmentTime, out var appointmentTime))
+            throw new Exception("Invalid time format. Expected HH:mm.");
+
         // 2. Prevent past dates (Allow Today)
-        if (dto.AppointmentDate < DateOnly.FromDateTime(DateTime.Today))
+        if (appointmentDate < DateOnly.FromDateTime(DateTime.Today))
             throw new Exception("Appointment must not be in the past");
 
         // 3. Validate requested time is within Doctor's Schedule
-        var schedules = await _scheduleRepo.GetByDoctorAndDateAsync(dto.DoctorId, dto.AppointmentDate);
+        var schedules = await _scheduleRepo.GetByDoctorAndDateAsync(dto.DoctorId, appointmentDate);
         var activeSchedules = schedules.Where(s => !s.IsLeave).ToList();
         
-        Console.WriteLine($"Booking attempt for Doctor {dto.DoctorId} on {dto.AppointmentDate} at {dto.AppointmentTime}");
+        Console.WriteLine($"Booking attempt for Doctor {dto.DoctorId} on {appointmentDate} at {appointmentTime}");
         foreach(var s in activeSchedules) Console.WriteLine($" - Available Shift: {s.ShiftStart} to {s.ShiftEnd}");
 
         if (!activeSchedules.Any())
             throw new Exception("The doctor has no active schedule for the selected date.");
 
         bool isWithinShift = activeSchedules.Any(s => 
-            dto.AppointmentTime >= s.ShiftStart && dto.AppointmentTime <= s.ShiftEnd);
+            appointmentTime >= s.ShiftStart && appointmentTime <= s.ShiftEnd);
 
         if (!isWithinShift)
         {
             Console.WriteLine("REJECTED: Time is outside scheduled shifts.");
-            throw new Exception($"The requested time {dto.AppointmentTime} is outside of the doctor's scheduled shift hours for today.");
+            throw new Exception($"The requested time {appointmentTime} is outside of the doctor's scheduled shift hours for today.");
         }
         Console.WriteLine("ACCEPTED: Time is within shift.");
 
         // 4. Check exact time slot not already taken
-        bool slotTaken = await _repository.ExistsAsync(dto.DoctorId, dto.AppointmentDate, dto.AppointmentTime);
+        bool slotTaken = await _repository.ExistsAsync(dto.DoctorId, appointmentDate, appointmentTime);
         if (slotTaken) throw new Exception("This time slot is already booked. Please choose another time.");
 
         // 4. Check patient doesn't already have appointment same day same doctor
-        bool duplicate = await _repository.PatientHasAppointmentAsync(patientId, dto.DoctorId, dto.AppointmentDate);
-        if (duplicate) throw new Exception("You already have an appointment with this doctor on this date.");
+        // Skip for Guest Patients (PatientId = 0)
+        if (patientId > 0)
+        {
+            bool duplicate = await _repository.PatientHasAppointmentAsync(patientId, dto.DoctorId, appointmentDate);
+            if (duplicate) throw new Exception("You already have an appointment with this doctor on this date.");
+        }
 
         // 5. Check max patients per day not exceeded
-        int todayCount = await _repository.GetDoctorDayCountAsync(dto.DoctorId, dto.AppointmentDate);
+        int todayCount = await _repository.GetDoctorDayCountAsync(dto.DoctorId, appointmentDate);
         if (todayCount >= doctor.MaxPatientsPerDay)
             throw new Exception($"Doctor's schedule is full. Max {doctor.MaxPatientsPerDay} patients per day.");
 
         // 6. Auto-assign token number
-        int token = await _repository.GetNextTokenAsync(dto.DoctorId, dto.AppointmentDate);
+        int token = await _repository.GetNextTokenAsync(dto.DoctorId, appointmentDate);
 
         var appointment = new Appointment
         {
@@ -157,8 +174,8 @@ public class AppointmentService : IAppointmentService
             PatientPhone = dto.PatientPhone,
             PatientAge = dto.PatientAge,
             DoctorId = dto.DoctorId,
-            AppointmentDate = dto.AppointmentDate,
-            AppointmentTime = dto.AppointmentTime,
+            AppointmentDate = appointmentDate,
+            AppointmentTime = appointmentTime,
             TokenNumber = token,
             Status = "Scheduled",
             ChiefComplaint = dto.ChiefComplaint,

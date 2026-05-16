@@ -47,6 +47,7 @@ public partial class NotificationDbContext : DbContext
                 .HasDefaultValue("InApp");
             entity.Property(e => e.Message).HasMaxLength(1000);
             entity.Property(e => e.RelatedEntityType).HasMaxLength(50);
+            entity.Property(e => e.TargetUrl).IsRequired(false);
             entity.Property(e => e.SentAt).HasDefaultValueSql("(getutcdate())");
             entity.Property(e => e.Title).HasMaxLength(200);
             entity.Property(e => e.Type).HasMaxLength(50);

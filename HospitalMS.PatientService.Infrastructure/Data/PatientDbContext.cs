@@ -37,6 +37,8 @@ public partial class PatientDbContext : DbContext
 
     public virtual DbSet<LabTest> LabTests { get; set; }
 
+    public virtual DbSet<PatientVital> PatientVitals { get; set; }
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -48,6 +50,7 @@ public partial class PatientDbContext : DbContext
         modelBuilder.Entity<DoctorSchedule>().HasQueryFilter(e => e.TenantId == _tenant!.TenantId);
         modelBuilder.Entity<LabOrder>().HasQueryFilter(e => e.TenantId == _tenant!.TenantId);
         modelBuilder.Entity<LabTest>().HasQueryFilter(e => e.TenantId == _tenant!.TenantId);
+        modelBuilder.Entity<PatientVital>().HasQueryFilter(e => e.TenantId == _tenant!.TenantId);
 
         modelBuilder.Entity<Admission>(entity =>
         {
@@ -76,8 +79,9 @@ public partial class PatientDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Appointm__3214EC075AE861A1");
 
-            entity.Property(e => e.PatientName).HasMaxLength(150);
-            entity.Property(e => e.PatientPhone).HasMaxLength(20);
+            entity.Property(e => e.PatientName).HasMaxLength(200);
+            entity.Property(e => e.PatientPhone).HasMaxLength(40);
+            entity.Property(e => e.PatientAge).HasDefaultValue(0);
             entity.Property(e => e.ChiefComplaint).HasMaxLength(500);
             entity.Property(e => e.ConsultationNotes).HasMaxLength(2000);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
@@ -220,6 +224,25 @@ public partial class PatientDbContext : DbContext
             entity.Property(e => e.SampleType).HasMaxLength(50);
             entity.Property(e => e.TestName).HasMaxLength(150);
             entity.Property(e => e.TurnaroundHours).HasDefaultValue(2);
+        });
+
+        modelBuilder.Entity<PatientVital>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Temperature).HasColumnType("decimal(5, 2)");
+            entity.Property(e => e.Weight).HasColumnType("decimal(5, 2)");
+            entity.Property(e => e.Height).HasColumnType("decimal(5, 2)");
+            entity.Property(e => e.BloodPressure).HasMaxLength(20);
+            entity.Property(e => e.RecordedBy).HasMaxLength(100);
+            entity.Property(e => e.RecordedAt).HasDefaultValueSql("(getutcdate())");
+
+            entity.HasOne(d => d.Admission).WithMany()
+                .HasForeignKey(d => d.AdmissionId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(d => d.Appointment).WithMany()
+                .HasForeignKey(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
       

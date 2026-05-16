@@ -3,12 +3,13 @@ namespace HospitalMS.PatientService.Application.DTOs;
 // Request DTO — what frontend sends when booking
 public class BookAppointmentDto
 {
+    public int? PatientId { get; set; } // Optional: provided by staff for manual booking
     public int DoctorId { get; set; }
     public string PatientName { get; set; } = string.Empty;
     public string? PatientPhone { get; set; }
     public int PatientAge { get; set; }
-    public DateOnly AppointmentDate { get; set; }
-    public TimeOnly AppointmentTime { get; set; }
+    public string AppointmentDate { get; set; } = string.Empty; // Use string for easier JSON binding
+    public string AppointmentTime { get; set; } = string.Empty; // Use string for easier JSON binding
     public string? ChiefComplaint { get; set; }
 }
 

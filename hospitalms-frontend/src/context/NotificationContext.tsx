@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSignalR } from '../hooks/useSignalR';
 import { useAuth } from './AuthContext';
 import { notificationApi } from '../api/axiosInstance';
@@ -28,6 +29,7 @@ export interface Notification {
   sentAt: string;
   relatedEntityId?: number;
   relatedEntityType?: string;
+  targetUrl?: string;
 }
 
 interface NotificationContextType {
@@ -141,6 +143,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   });
 
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     localStorage.setItem('hms_notif_enabled', JSON.stringify(notificationsEnabled));
@@ -317,15 +320,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     {
       event: 'ReceiveNotification',
       handler: (data: any) => {
+        const targetUrl = data.targetUrl || data.TargetUrl;
         addToast({
           type: data.type || data.Type || 'info',
           title: data.title || data.Title || 'New Notification',
           message: data.message || data.Message,
+          onClick: targetUrl ? () => navigate(targetUrl) : undefined
         });
         fetchNotifications();
       },
     }
-  ], [addToast, fetchNotifications]);
+  ], [addToast, fetchNotifications, navigate]);
 
   useSignalR(signalrEvents, isAuthenticated);
 

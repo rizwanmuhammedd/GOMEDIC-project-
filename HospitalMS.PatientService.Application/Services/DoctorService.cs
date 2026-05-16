@@ -227,7 +227,7 @@ public class DoctorService : IDoctorService
                 var doctor = await _repository.GetByIdAsync(existing.DoctorId);
                 if (existing.IsLeave)
                 {
-                    await NotifyPatients(activeAppts, $"Dr. {doctor?.FullName} is on leave on {existing.ScheduleDate:yyyy-MM-dd}. Please contact support to reschedule.");
+                    await NotifyPatients(activeAppts, $"Dr. {doctor?.FullName} is on leave on {existing.ScheduleDate:yyyy-MM-dd}. Your appointment has been affected. Please rebook.", "/appointments");
                 }
                 else if (existing.ShiftStart != oldStart || existing.ShiftEnd != oldEnd || existing.ScheduleDate != oldDate)
                 {
@@ -240,7 +240,7 @@ public class DoctorService : IDoctorService
 
                     if (affected.Any())
                     {
-                        await NotifyPatients(affected, $"Dr. {doctor?.FullName} updated their schedule for {oldDate:yyyy-MM-dd}. Your appointment time may no longer be valid.");
+                        await NotifyPatients(affected, $"Dr. {doctor?.FullName} updated their schedule for {oldDate:yyyy-MM-dd}. Your appointment time is no longer valid. Please rebook.", "/appointments");
                     }
                 }
             }
@@ -251,7 +251,7 @@ public class DoctorService : IDoctorService
         }
     }
 
-    private async Task NotifyPatients(List<Appointment> appointments, string message)
+    private async Task NotifyPatients(List<Appointment> appointments, string message, string? targetUrl = null)
     {
         var client = _httpClientFactory.CreateClient();
         foreach (var appt in appointments)
@@ -263,7 +263,8 @@ public class DoctorService : IDoctorService
                     UserId = appt.PatientId,
                     Title = "🗓 Appointment Schedule Update",
                     Message = message,
-                    Type = "warning"
+                    Type = "warning",
+                    TargetUrl = targetUrl
                 });
             }
             catch { /* ignore */ }

@@ -74,13 +74,14 @@ public class NotificationsController : ControllerBase
         public string Type { get; set; }
         public int? RelatedEntityId { get; set; }
         public string? RelatedEntityType { get; set; }
+        public string? TargetUrl { get; set; }
     }
 
     [HttpPost]
     [AllowAnonymous]
     public async Task<IActionResult> Create([FromBody] CreateNotificationRequest request)
     {
-        await _svc.SendAsync(request.UserId, request.Title, request.Message, request.Type, request.RelatedEntityId, request.RelatedEntityType);
+        await _svc.SendAsync(request.UserId, request.Title, request.Message, request.Type, request.RelatedEntityId, request.RelatedEntityType, request.TargetUrl);
         return Ok(new { message = "Notification created and sent" });
     }
 
@@ -90,13 +91,14 @@ public class NotificationsController : ControllerBase
         public string Title { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
+        public string? TargetUrl { get; set; }
     }
 
     [HttpPost("role")]
     [AllowAnonymous]
     public async Task<IActionResult> SendToRole([FromBody] RoleNotificationRequest request)
     {
-        await _svc.SendToRoleAsync(request.Role, request.Title, request.Message, request.Type);
+        await _svc.SendToRoleAsync(request.Role, request.Title, request.Message, request.Type, targetUrl: request.TargetUrl);
         return Ok(new { message = $"Notifications sent to all {request.Role}s" });
     }
 

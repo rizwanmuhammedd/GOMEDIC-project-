@@ -47,6 +47,7 @@ builder.Services.AddScoped<IDoctorRepository, DoctorRepository>();
 builder.Services.AddScoped<IBedRepository, BedRepository>();
 builder.Services.AddScoped<ILabOrderRepository, LabOrderRepository>();
 builder.Services.AddScoped<IDoctorScheduleRepository, DoctorScheduleRepository>();
+builder.Services.AddScoped<IPatientVitalRepository, PatientVitalRepository>();
 
 // Services
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
@@ -54,6 +55,7 @@ builder.Services.AddScoped<IDepartmentService, DepartmentService>();
 builder.Services.AddScoped<IDoctorService, DoctorService>();
 builder.Services.AddScoped<IBedService, BedService>();
 builder.Services.AddScoped<ILabService, LabService>();
+builder.Services.AddScoped<IPatientVitalService, PatientVitalService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ITenantProvider, TenantProvider>();
 

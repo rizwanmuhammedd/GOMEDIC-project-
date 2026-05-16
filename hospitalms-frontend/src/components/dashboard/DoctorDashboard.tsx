@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Calendar, BedDouble, Pill, Plus, X, Search, Activity, Camera, User, ClipboardList, CheckCircle2, Clock, Users, ArrowRight } from 'lucide-react';
 import { StatCard, Card, Badge, statusBadge, Button, Modal, Input, PageHeader, EmptyState, LoadingSpinner, Select } from '../ui';
-import { appointmentApi, admissionApi, medicineApi, prescriptionApi, authApi, doctorApi, bedApi } from '../../api/axiosInstance';
+import { appointmentApi, admissionApi, medicineApi, prescriptionApi, authApi, doctorApi, bedApi, vitalsApi } from '../../api/axiosInstance';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 
@@ -22,6 +22,28 @@ const DoctorDashboard: React.FC = () => {
   const [selectedPatientName, setSelectedPatientName] = useState('');
   const [selectedApptId, setSelectedApptId] = useState<number | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+
+  // Vitals State
+  const [vitalsOpen, setVitalsOpen] = useState(false);
+  const [vitalsList, setVitalsList] = useState<any[]>([]);
+  const [selectedAdmission, setSelectedAdmission] = useState<any | null>(null);
+  const [vitalsForm, setVitalsForm] = useState({
+    temperature: '',
+    bloodPressure: '',
+    heartRate: '',
+    respiratoryRate: '',
+    oxygenSaturation: '',
+    weight: '',
+    height: ''
+  });
+
+  // History State
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [patientHistory, setPatientHistory] = useState<{
+    appointments: any[];
+    prescriptions: any[];
+    admissions: any[];
+  }>({ appointments: [], prescriptions: [], admissions: [] });
 
   // Admission State
   const [admitForm, setAdmitForm] = useState({
@@ -267,6 +289,65 @@ const DoctorDashboard: React.FC = () => {
         }
       }
     });
+  };
+
+  const fetchVitals = async (admissionId: number) => {
+    try {
+      const res = await vitalsApi.getByAdmission(admissionId);
+      setVitalsList(res.data);
+    } catch (err) {
+      console.error("Vitals load failed", err);
+    }
+  };
+
+  const handleSaveVitals = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAdmission) return;
+    setSubmitting(true);
+    try {
+      await vitalsApi.create({
+        patientId: selectedAdmission.patientId,
+        admissionId: selectedAdmission.id,
+        temperature: parseFloat(vitalsForm.temperature) || null,
+        bloodPressure: vitalsForm.bloodPressure || null,
+        heartRate: parseInt(vitalsForm.heartRate) || null,
+        respiratoryRate: parseInt(vitalsForm.respiratoryRate) || null,
+        oxygenSaturation: parseInt(vitalsForm.oxygenSaturation) || null,
+        weight: parseFloat(vitalsForm.weight) || null,
+        height: parseFloat(vitalsForm.height) || null,
+      });
+      addToast({ type: 'success', title: 'Vitals Recorded', message: 'Patient vitals updated.' });
+      setVitalsForm({
+        temperature: '', bloodPressure: '', heartRate: '',
+        respiratoryRate: '', oxygenSaturation: '', weight: '', height: ''
+      });
+      fetchVitals(selectedAdmission.id);
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Failed', message: err.response?.data?.message || 'Error saving vitals' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const fetchHistory = async (patientId: number) => {
+    setLoading(true);
+    try {
+      const [apptRes, prescRes, admRes] = await Promise.all([
+        appointmentApi.getByPatient(patientId),
+        prescriptionApi.getByPatient(patientId),
+        admissionApi.getByPatient(patientId)
+      ]);
+      setPatientHistory({
+        appointments: apptRes.data,
+        prescriptions: prescRes.data,
+        admissions: admRes.data
+      });
+      setHistoryOpen(true);
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'History Failed', message: 'Could not load patient history.' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderDashboard = () => {
@@ -735,8 +816,8 @@ const DoctorDashboard: React.FC = () => {
                </div>
 
                <div className="pt-4 border-t border-zinc-50 flex gap-2">
-                  <Button size="sm" variant="secondary" className="flex-1 text-[11px] h-8">Vitals</Button>
-                  <Button size="sm" variant="secondary" className="flex-1 text-[11px] h-8">History</Button>
+                  <Button size="sm" variant="secondary" className="flex-1 text-[11px] h-8" onClick={() => { setSelectedAdmission(a); fetchVitals(a.id); setVitalsOpen(true); }}>Vitals</Button>
+                  <Button size="sm" variant="secondary" className="flex-1 text-[11px] h-8" onClick={() => fetchHistory(a.patientId)}>History</Button>
                </div>
             </div>
           </Card>
@@ -887,6 +968,149 @@ const DoctorDashboard: React.FC = () => {
         </div>
         <div className="mt-8 pt-5 border-t border-zinc-100 flex justify-end">
           <Button className="w-full sm:w-auto min-w-[200px] bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-500/10" loading={submitting} onClick={handleSavePrescription}>Confirm & Finalize</Button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={vitalsOpen} onClose={() => setVitalsOpen(false)} title={`Patient Vitals - ${selectedAdmission?.patientName || 'Admitted Patient'}`} size="xl">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="space-y-6">
+            <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3">Normal Reference Values</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px] text-zinc-500 font-medium">
+                    <div className="flex justify-between border-b border-zinc-100 pb-1"><span>Temp:</span> <span className="text-zinc-900">36.5 - 37.5 °C</span></div>
+                    <div className="flex justify-between border-b border-zinc-100 pb-1"><span>BP:</span> <span className="text-zinc-900">120/80 mmHg</span></div>
+                    <div className="flex justify-between border-b border-zinc-100 pb-1"><span>Pulse:</span> <span className="text-zinc-900">60 - 100 bpm</span></div>
+                    <div className="flex justify-between border-b border-zinc-100 pb-1"><span>SpO2:</span> <span className="text-zinc-900">95 - 100%</span></div>
+                    <div className="flex justify-between border-b border-zinc-100 pb-1"><span>Resp:</span> <span className="text-zinc-900">12 - 16 /min</span></div>
+                </div>
+            </div>
+
+            <form onSubmit={handleSaveVitals} className="space-y-4">
+                <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Record New Vitals</p>
+                <div className="grid grid-cols-2 gap-4">
+                    <Input label="Temp (°C)" type="number" step="0.1" value={vitalsForm.temperature} onChange={(e: any) => setVitalsForm({ ...vitalsForm, temperature: e.target.value })} />
+                    <Input label="BP (e.g. 120/80)" value={vitalsForm.bloodPressure} onChange={(e: any) => setVitalsForm({ ...vitalsForm, bloodPressure: e.target.value })} />
+                    <Input label="Heart Rate (bpm)" type="number" value={vitalsForm.heartRate} onChange={(e: any) => setVitalsForm({ ...vitalsForm, heartRate: e.target.value })} />
+                    <Input label="Resp. Rate" type="number" value={vitalsForm.respiratoryRate} onChange={(e: any) => setVitalsForm({ ...vitalsForm, respiratoryRate: e.target.value })} />
+                    <Input label="SpO2 (%)" type="number" value={vitalsForm.oxygenSaturation} onChange={(e: any) => setVitalsForm({ ...vitalsForm, oxygenSaturation: e.target.value })} />
+                    <Input label="Weight (kg)" type="number" step="0.1" value={vitalsForm.weight} onChange={(e: any) => setVitalsForm({ ...vitalsForm, weight: e.target.value })} />
+                </div>
+                <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" loading={submitting}>Save Vitals</Button>
+            </form>
+          </div>
+
+          <div className="space-y-4">
+             <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Recent Records</p>
+             <div className="max-h-[500px] overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                {vitalsList.length === 0 ? (
+                  <div className="py-10 text-center text-zinc-400 text-sm italic border border-dashed border-zinc-200 rounded-xl">No vitals recorded yet</div>
+                ) : (
+                  vitalsList.map(v => (
+                    <div key={v.id} className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 text-[12px]">
+                       <div className="flex justify-between items-center mb-3 pb-2 border-b border-zinc-100/50">
+                          <span className="font-bold text-zinc-900">{new Date(v.recordedAt).toLocaleString()}</span>
+                          <span className="text-zinc-400 bg-white px-2 py-0.5 rounded-full border border-zinc-100">By {v.recordedBy}</span>
+                       </div>
+                       <div className="grid grid-cols-3 gap-y-3 gap-x-2 text-zinc-600">
+                          {v.temperature && (
+                            <div>
+                                <p className="text-[10px] text-zinc-400 uppercase font-bold">Temp</p>
+                                <p className={`font-bold ${v.temperature > 37.5 || v.temperature < 36.5 ? 'text-red-600' : 'text-zinc-900'}`}>{v.temperature}°C</p>
+                            </div>
+                          )}
+                          {v.bloodPressure && (
+                            <div>
+                                <p className="text-[10px] text-zinc-400 uppercase font-bold">BP</p>
+                                <p className="text-zinc-900 font-bold">{v.bloodPressure}</p>
+                            </div>
+                          )}
+                          {v.heartRate && (
+                            <div>
+                                <p className="text-[10px] text-zinc-400 uppercase font-bold">Pulse</p>
+                                <p className={`font-bold ${v.heartRate > 100 || v.heartRate < 60 ? 'text-red-600' : 'text-zinc-900'}`}>{v.heartRate} bpm</p>
+                            </div>
+                          )}
+                          {v.oxygenSaturation && (
+                            <div>
+                                <p className="text-[10px] text-zinc-400 uppercase font-bold">SpO2</p>
+                                <p className={`font-bold ${v.oxygenSaturation < 95 ? 'text-red-600' : 'text-zinc-900'}`}>{v.oxygenSaturation}%</p>
+                            </div>
+                          )}
+                          {v.respiratoryRate && (
+                            <div>
+                                <p className="text-[10px] text-zinc-400 uppercase font-bold">Resp</p>
+                                <p className="text-zinc-900 font-bold">{v.respiratoryRate}/min</p>
+                            </div>
+                          )}
+                          {v.weight && (
+                            <div>
+                                <p className="text-[10px] text-zinc-400 uppercase font-bold">Weight</p>
+                                <p className="text-zinc-900 font-bold">{v.weight}kg</p>
+                            </div>
+                          )}
+                       </div>
+                    </div>
+                  ))
+                )}
+             </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={historyOpen} onClose={() => setHistoryOpen(false)} title="Comprehensive Medical History" size="xl">
+        <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
+           <div>
+              <h4 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Calendar className="w-3.5 h-3.5" /> Past Appointments</h4>
+              <div className="space-y-2">
+                 {patientHistory.appointments.length === 0 ? <p className="text-sm text-zinc-400 italic">No past appointments</p> : 
+                  patientHistory.appointments.map(a => (
+                    <div key={a.id} className="p-3 bg-white border border-zinc-100 rounded-lg flex justify-between items-center">
+                       <div>
+                          <p className="text-[13px] font-bold text-zinc-900">{a.appointmentDate} - {a.appointmentTime}</p>
+                          <p className="text-[11px] text-zinc-500">{a.doctorName} &bull; {a.departmentName}</p>
+                       </div>
+                       <Badge variant={statusBadge(a.status)}>{a.status}</Badge>
+                    </div>
+                  ))}
+              </div>
+           </div>
+
+           <div>
+              <h4 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Pill className="w-3.5 h-3.5" /> Prescription History</h4>
+              <div className="space-y-3">
+                 {patientHistory.prescriptions.length === 0 ? <p className="text-sm text-zinc-400 italic">No prescriptions found</p> : 
+                  patientHistory.prescriptions.map(p => (
+                    <div key={p.id} className="p-4 bg-zinc-50/50 rounded-xl border border-zinc-100">
+                       <div className="flex justify-between items-start mb-2">
+                          <p className="text-[13px] font-bold text-zinc-900">Prescription #{p.id}</p>
+                          <span className="text-[11px] text-zinc-400">{new Date(p.prescribedAt).toLocaleDateString()}</span>
+                       </div>
+                       <p className="text-[12px] text-zinc-600 mb-2 italic">"{p.notes}"</p>
+                       <div className="flex flex-wrap gap-2">
+                          {p.items?.map((it: any, i: number) => (
+                            <Badge key={i} variant="secondary" className="text-[10px]">{it.medicineName} x{it.quantityToDispense}</Badge>
+                          ))}
+                       </div>
+                    </div>
+                  ))}
+              </div>
+           </div>
+
+           <div>
+              <h4 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2"><BedDouble className="w-3.5 h-3.5" /> Past Admissions</h4>
+              <div className="space-y-2">
+                 {patientHistory.admissions.length === 0 ? <p className="text-sm text-zinc-400 italic">No past admissions</p> : 
+                  patientHistory.admissions.map(a => (
+                    <div key={a.id} className="p-3 bg-white border border-zinc-100 rounded-lg flex justify-between items-center">
+                       <div>
+                          <p className="text-[13px] font-bold text-zinc-900">{new Date(a.admissionDate).toLocaleDateString()} - {a.dischargeDate ? new Date(a.dischargeDate).toLocaleDateString() : 'Present'}</p>
+                          <p className="text-[11px] text-zinc-500">{a.admissionReason}</p>
+                       </div>
+                       <Badge variant={a.status === 'Active' ? 'success' : 'secondary'}>{a.status}</Badge>
+                    </div>
+                  ))}
+              </div>
+           </div>
         </div>
       </Modal>
     </div>

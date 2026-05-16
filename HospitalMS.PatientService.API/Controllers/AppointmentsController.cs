@@ -45,6 +45,14 @@ public class AppointmentsController : ControllerBase
         return Ok(list);
     }
 
+    [HttpGet("patient/{patientId:int}")]
+    [Authorize(Roles = "Doctor,Admin,Receptionist")]
+    public async Task<IActionResult> GetByPatient(int patientId)
+    {
+        var list = await _svc.GetByPatientIdAsync(patientId);
+        return Ok(list);
+    }
+
     // GET api/appointments/doctor/3
     [HttpGet("doctor/{doctorId:int}")]
     [Authorize(Roles = "Doctor,Admin")]
@@ -87,7 +95,11 @@ public class AppointmentsController : ControllerBase
         var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
 
-        int patientId = int.Parse(userIdStr);
+        int loggedInUserId = int.Parse(userIdStr);
+        
+        // If staff provides a specific PatientId, use it. Otherwise use logged in user's ID (patient booking for self)
+        int patientId = (dto.PatientId.HasValue && !User.IsInRole("Patient")) ? dto.PatientId.Value : loggedInUserId;
+
         try 
         {
             var result = await _svc.BookAsync(patientId, dto);

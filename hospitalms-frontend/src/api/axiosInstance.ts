@@ -83,6 +83,7 @@ export const appointmentApi = {
   getAll: () => api.get('/api/appointments'),
   getByDoctor: (doctorId: number) => api.get(`/api/appointments/doctor/${doctorId}`),
   getByMyDoctor: () => api.get('/api/appointments/doctor/me'),
+  getByPatient: (patientId: number) => api.get(`/api/appointments/patient/${patientId}`),
   book: (data: any) => api.post('/api/appointments', data),
   update: (id: number, data: any) => api.put(`/api/appointments/${id}`, data),
   cancel: (id: number) => api.delete(`/api/appointments/${id}/cancel`),
@@ -98,8 +99,16 @@ export const bedApi = {
 // ==================== ADMISSION API ====================
 export const admissionApi = {
   getAll: () => api.get('/api/admissions'),
+  getByPatient: (patientId: number) => api.get(`/api/admissions/patient/${patientId}`),
   admit: (data: any) => api.post('/api/admissions', data),
   discharge: (id: number, data: any) => api.put(`/api/admissions/${id}/discharge`, data),
+};
+
+// ==================== VITALS API ====================
+export const vitalsApi = {
+  getByPatient: (patientId: number) => api.get(`/api/vitals/patient/${patientId}`),
+  getByAdmission: (admissionId: number) => api.get(`/api/vitals/admission/${admissionId}`),
+  create: (data: any) => api.post('/api/vitals', data),
 };
 
 // ==================== MEDICINE API ====================

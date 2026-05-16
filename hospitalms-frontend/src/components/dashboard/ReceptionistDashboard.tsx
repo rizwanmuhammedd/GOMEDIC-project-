@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PageHeader, Card, EmptyState, Badge, LoadingSpinner, Button, statusBadge, Modal, Input, Select } from '../ui';
-import { Calendar, Receipt, Search, BedDouble, ArrowRight } from 'lucide-react';
-import api, { appointmentApi, prescriptionApi, doctorApi, bedApi, admissionApi } from '../../api/axiosInstance';
+import { Calendar, Receipt, Search, BedDouble, ArrowRight, Activity, Plus } from 'lucide-react';
+import api, { appointmentApi, prescriptionApi, doctorApi, bedApi, admissionApi, vitalsApi } from '../../api/axiosInstance';
 import { useNotifications } from '../../context/NotificationContext';
 import { EnquiryChat } from '../chat/EnquiryChat';
 import { useSignalR } from '../../hooks/useSignalR';
@@ -31,10 +31,103 @@ export const ReceptionistDashboard = () => {
     const [assignBedModalOpen, setAssignBedModalOpen] = useState(false);
     const [selectedAdmission, setSelectedAdmission] = useState<any | null>(null);
 
+    // Manual Booking State
+    const [manualBookOpen, setManualBookOpen] = useState(false);
+    const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+    const [bookForm, setBookForm] = useState({
+        patientName: '',
+        patientAge: '',
+        patientPhone: '',
+        doctorId: '',
+        date: new Date().toISOString().split('T')[0],
+        time: '',
+        chiefComplaint: ''
+    });
+
+    const fetchSlots = async (doctorId: number, date: string) => {
+        try {
+            const res = await api.get(`/api/appointments/slots/${doctorId}?date=${date}`);
+            setAvailableSlots(res.data.availableSlots || []);
+        } catch (err) {
+            console.error("Slots load failed", err);
+        }
+    };
+
+    const handleManualBook = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        // Validation
+        if (!bookForm.doctorId || !bookForm.date || !bookForm.time) {
+            addToast({ type: 'error', title: 'Missing Info', message: 'Please select doctor, date and time.' });
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            // Ensure date is in YYYY-MM-DD format regardless of display
+            let formattedDate = bookForm.date;
+            if (formattedDate.includes('-') && formattedDate.split('-')[0].length !== 4) {
+                // Handle DD-MM-YYYY if it somehow leaked through
+                const parts = formattedDate.split('-');
+                formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+
+            await api.post('/api/appointments', {
+                patientId: 0, // Special ID for guest booking
+                patientName: bookForm.patientName,
+                patientAge: parseInt(bookForm.patientAge) || 0,
+                patientPhone: bookForm.patientPhone,
+                doctorId: parseInt(bookForm.doctorId),
+                appointmentDate: formattedDate,
+                appointmentTime: bookForm.time,
+                chiefComplaint: bookForm.chiefComplaint
+            });
+            addToast({ type: 'success', title: 'Appointment Booked', message: `Manual booking for ${bookForm.patientName} successful.` });
+            setManualBookOpen(false);
+            setBookForm({
+                patientName: '', patientAge: '', patientPhone: '',
+                doctorId: '', date: new Date().toISOString().split('T')[0],
+                time: '', chiefComplaint: ''
+            });
+            loadData();
+        } catch (err: any) {
+            const errorData = err.response?.data;
+            let errorMsg = 'An unexpected error occurred during booking.';
+            
+            if (errorData?.errors) {
+                // Extract specific validation errors
+                const details = Object.entries(errorData.errors)
+                    .map(([field, msgs]: [any, any]) => `${field}: ${msgs.join(', ')}`)
+                    .join(' | ');
+                errorMsg = `Validation failed: ${details}`;
+            } else {
+                errorMsg = errorData?.message || errorData?.title || errorMsg;
+            }
+
+            console.error("Manual Booking Error Details:", errorData);
+            addToast({ type: 'error', title: 'Booking Failed', message: errorMsg });
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     const [billForm, setBillForm] = useState({
         consultationCharge: 0, medicineCharge: 0, labCharge: 0, bedCharge: 0, otherCharges: 0, discount: 0
     });
     const [payForm, setPayForm] = useState({ amount: 0, method: 'Cash' });
+
+    // Vitals State
+    const [vitalsOpen, setVitalsOpen] = useState(false);
+    const [vitalsList, setVitalsList] = useState<any[]>([]);
+
+    const fetchVitals = async (admissionId: number) => {
+        try {
+            const res = await vitalsApi.getByAdmission(admissionId);
+            setVitalsList(res.data);
+        } catch (err) {
+            console.error("Vitals load failed", err);
+        }
+    };
 
     const loadData = useCallback(async () => {
         try {
@@ -285,7 +378,10 @@ export const ReceptionistDashboard = () => {
                                             <td className="p-4 text-right">
                                                 <div className="flex flex-col items-end">
                                                     <p className="text-[12px] font-bold text-zinc-800">{new Date(adm.admissionDate).toLocaleDateString()}</p>
-                                                    <Button size="sm" variant="secondary" className="mt-2" onClick={() => { setSelectedAdmission(adm); setDischargeModalOpen(true); }}>Discharge</Button>
+                                                    <div className="flex gap-2 mt-2">
+                                                        <Button size="sm" variant="secondary" onClick={() => { setSelectedAdmission(adm); fetchVitals(adm.id); setVitalsOpen(true); }}><Activity className="w-3 h-3 mr-1" /> Vitals</Button>
+                                                        <Button size="sm" variant="secondary" onClick={() => { setSelectedAdmission(adm); setDischargeModalOpen(true); }}>Discharge</Button>
+                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -373,7 +469,12 @@ export const ReceptionistDashboard = () => {
 
         return (
             <div className="space-y-6">
-                {withHeader && <PageHeader title="Patient Appointments" subtitle="Manage hospital check-ins and clinical scheduling" />}
+                <div className="flex justify-between items-end">
+                    {withHeader && <PageHeader title="Patient Appointments" subtitle="Manage hospital check-ins and clinical scheduling" />}
+                    <Button onClick={() => setManualBookOpen(true)} className="mb-1 bg-zinc-900 hover:bg-zinc-800 text-[12px] h-10 px-6 rounded-xl shadow-lg shadow-zinc-200">
+                        <Plus className="w-4 h-4 mr-2" /> Manual Booking
+                    </Button>
+                </div>
                 <Card title="Today's Active Appointments">
                     <div className="mb-4 relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
@@ -735,6 +836,155 @@ export const ReceptionistDashboard = () => {
                 </div>
                 <EnquiryChat />
             </div>
+
+            <Modal isOpen={vitalsOpen} onClose={() => setVitalsOpen(false)} title={`Clinical Vitals - ${selectedAdmission?.patientName || 'Patient'}`} size="lg">
+                <div className="space-y-6">
+                    <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 flex justify-between items-center">
+                        <div>
+                            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Normal Reference Values</p>
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-1 mt-2 text-[11px] text-zinc-500 font-medium">
+                                <span>Temp: 36.5 - 37.5 °C</span>
+                                <span>BP: 120/80 mmHg</span>
+                                <span>Pulse: 60 - 100 bpm</span>
+                                <span>SpO2: 95 - 100%</span>
+                            </div>
+                        </div>
+                        <Activity className="w-8 h-8 text-emerald-500 opacity-20" />
+                    </div>
+
+                    <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+                        {vitalsList.length === 0 ? (
+                            <div className="py-12 text-center text-zinc-400 text-sm italic border border-dashed border-zinc-200 rounded-xl">No vitals have been recorded for this admission yet.</div>
+                        ) : (
+                            vitalsList.map(v => (
+                                <div key={v.id} className="p-4 bg-white border border-zinc-100 rounded-2xl shadow-sm transition-shadow hover:shadow-md">
+                                    <div className="flex justify-between items-center mb-4 pb-2 border-b border-zinc-50">
+                                        <span className="text-[12px] font-black text-zinc-900">{new Date(v.recordedAt).toLocaleString()}</span>
+                                        <Badge variant="secondary" className="text-[10px]">Recorded By: {v.recordedBy}</Badge>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                        {v.temperature && (
+                                            <div className="p-2 bg-zinc-50/50 rounded-lg">
+                                                <p className="text-[10px] font-bold text-zinc-400 uppercase">Temp</p>
+                                                <p className={`text-sm font-bold ${v.temperature > 37.5 || v.temperature < 36.5 ? 'text-red-600' : 'text-zinc-900'}`}>{v.temperature}°C</p>
+                                            </div>
+                                        )}
+                                        {v.bloodPressure && (
+                                            <div className="p-2 bg-zinc-50/50 rounded-lg">
+                                                <p className="text-[10px] font-bold text-zinc-400 uppercase">BP</p>
+                                                <p className="text-sm font-bold text-zinc-900">{v.bloodPressure}</p>
+                                            </div>
+                                        )}
+                                        {v.heartRate && (
+                                            <div className="p-2 bg-zinc-50/50 rounded-lg">
+                                                <p className="text-[10px] font-bold text-zinc-400 uppercase">Pulse</p>
+                                                <p className={`text-sm font-bold ${v.heartRate > 100 || v.heartRate < 60 ? 'text-red-600' : 'text-zinc-900'}`}>{v.heartRate} bpm</p>
+                                            </div>
+                                        )}
+                                        {v.oxygenSaturation && (
+                                            <div className="p-2 bg-zinc-50/50 rounded-lg">
+                                                <p className="text-[10px] font-bold text-zinc-400 uppercase">SpO2</p>
+                                                <p className={`text-sm font-bold ${v.oxygenSaturation < 95 ? 'text-red-600' : 'text-zinc-900'}`}>{v.oxygenSaturation}%</p>
+                                            </div>
+                                        )}
+                                        {v.respiratoryRate && (
+                                            <div className="p-2 bg-zinc-50/50 rounded-lg">
+                                                <p className="text-[10px] font-bold text-zinc-400 uppercase">Resp.</p>
+                                                <p className="text-sm font-bold text-zinc-900">{v.respiratoryRate}/min</p>
+                                            </div>
+                                        )}
+                                        {v.weight && (
+                                            <div className="p-2 bg-zinc-50/50 rounded-lg">
+                                                <p className="text-[10px] font-bold text-zinc-400 uppercase">Weight</p>
+                                                <p className="text-sm font-bold text-zinc-900">{v.weight} kg</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal isOpen={manualBookOpen} onClose={() => setManualBookOpen(false)} title="Quick Manual Booking" size="lg">
+                <form onSubmit={handleManualBook} className="space-y-6">
+                    <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center text-white">
+                            <Plus className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-[14px] font-bold text-zinc-900">Direct Patient Check-in</p>
+                            <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-widest">Front Desk Assistant</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="space-y-4">
+                            <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Patient Demographics</p>
+                            <Input label="Full Name" placeholder="e.g. Rahul Sharma" value={bookForm.patientName} onChange={(e: any) => setBookForm({ ...bookForm, patientName: e.target.value })} required />
+                            <div className="grid grid-cols-2 gap-4">
+                                <Input label="Age" type="number" placeholder="e.g. 25" value={bookForm.patientAge} onChange={(e: any) => setBookForm({ ...bookForm, patientAge: e.target.value })} required />
+                                <Input label="Phone" placeholder="10-digit mobile" value={bookForm.patientPhone} onChange={(e: any) => setBookForm({ ...bookForm, patientPhone: e.target.value })} required />
+                            </div>
+                            <Input label="Chief Complaint" placeholder="e.g. Fever and Headache" value={bookForm.chiefComplaint} onChange={(e: any) => setBookForm({ ...bookForm, chiefComplaint: e.target.value })} />
+                        </div>
+
+                        <div className="space-y-4">
+                            <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Scheduling Details</p>
+                            <Select 
+                                label="Select Consultant" 
+                                value={bookForm.doctorId} 
+                                onChange={(e: any) => { 
+                                    setBookForm({ ...bookForm, doctorId: e.target.value, time: '' }); 
+                                    if (e.target.value) fetchSlots(parseInt(e.target.value), bookForm.date);
+                                }}
+                                options={[{ value: '', label: 'Choose a Doctor' }, ...doctors.map(d => ({ value: d.id, label: d.fullName }))]}
+                                required
+                            />
+                            <Input 
+                                label="Appointment Date" 
+                                type="date" 
+                                value={bookForm.date} 
+                                onChange={(e: any) => { 
+                                    setBookForm({ ...bookForm, date: e.target.value, time: '' }); 
+                                    if (bookForm.doctorId) fetchSlots(parseInt(bookForm.doctorId), e.target.value);
+                                }}
+                                required
+                            />
+                            <Select 
+                                label="Available Time Slot" 
+                                value={bookForm.time} 
+                                onChange={(e: any) => setBookForm({ ...bookForm, time: e.target.value })}
+                                options={[
+                                    { value: '', label: 'Select a slot' },
+                                    ...availableSlots.map(s => {
+                                        const isBooked = s.endsWith('::booked');
+                                        const time = isBooked ? s.split('::')[0] : s;
+                                        return { 
+                                            value: time, 
+                                            label: isBooked ? `${time} (Booked)` : time,
+                                            disabled: isBooked
+                                        };
+                                    })
+                                ]}
+                                required
+                                disabled={!bookForm.doctorId || availableSlots.length === 0}
+                            />
+                            {!bookForm.doctorId ? (
+                                <p className="text-[10px] text-zinc-400 italic">Select a doctor first to see availability.</p>
+                            ) : availableSlots.length === 0 ? (
+                                <p className="text-[10px] text-red-500 font-bold">No slots available for this date.</p>
+                            ) : null}
+                        </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-zinc-100 flex gap-3">
+                        <Button type="button" variant="secondary" className="flex-1" onClick={() => setManualBookOpen(false)}>Discard</Button>
+                        <Button type="submit" className="flex-1 bg-zinc-900 hover:bg-zinc-800 shadow-xl shadow-zinc-200" loading={submitting}>Confirm & Book</Button>
+                    </div>
+                </form>
+            </Modal>
         </div>
     );
 };

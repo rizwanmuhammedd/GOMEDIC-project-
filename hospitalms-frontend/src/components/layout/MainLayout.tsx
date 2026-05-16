@@ -199,8 +199,19 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     <div className="max-h-[400px] overflow-y-auto">
                        {notifications.length === 0 ? <div className="py-12 text-center text-zinc-400 text-[13px]">No notifications</div> :
                          notifications.map(n => (
-                           <div key={n.id} className="p-4 border-b border-zinc-50 hover:bg-zinc-50 cursor-pointer">
-                              <p className="text-[13px] font-bold text-zinc-900">{n.title}</p>
+                           <div 
+                              key={n.id} 
+                              className="p-4 border-b border-zinc-50 hover:bg-zinc-50 cursor-pointer"
+                              onClick={() => {
+                                 if (!n.isRead) markAsRead(n.id);
+                                 if (n.targetUrl) navigate(n.targetUrl);
+                                 setNotifOpen(false);
+                              }}
+                           >
+                              <div className="flex justify-between items-start gap-2">
+                                 <p className={`text-[13px] font-bold ${n.isRead ? 'text-zinc-500' : 'text-zinc-900'}`}>{n.title}</p>
+                                 {!n.isRead && <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0" />}
+                              </div>
                               <p className="text-[12px] text-zinc-500 mt-0.5">{n.message}</p>
                            </div>
                          ))

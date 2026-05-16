@@ -9,13 +9,10 @@ public partial class Appointment
 
     public int PatientId { get; set; }
 
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string PatientName { get; set; } = string.Empty;
 
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string? PatientPhone { get; set; }
 
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public int PatientAge { get; set; }
 
     public int DoctorId { get; set; }
