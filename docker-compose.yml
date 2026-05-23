@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD:-YourStrong!Pass123}
+      - MSSQL_PID=Developer
+      - MSSQL_MEMORY_LIMIT_MB=400 # Explicitly tell SQL Server to stay within 400MB
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-U", "sa", "-P", "${MSSQL_SA_PASSWORD:-YourStrong!Pass123}", "-Q", "SELECT 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: HospitalMS.AuthService.API/Dockerfile
+    environment:
+      - ConnectionStrings__AuthDb=Server=db;Database=HospitalMS_AuthDB;User Id=sa;Password=${MSSQL_SA_PASSWORD:-YourStrong!Pass123};TrustServerCertificate=True
+      - ASPNETCORE_ENVIRONMENT=Production
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 120M
+
+  patient-service:
+    build:
+      context: .
+      dockerfile: HospitalMS.PatientService.API/Dockerfile
+    environment:
+      - ConnectionStrings__PatientDb=Server=db;Database=HospitalMS_PatientDB;User Id=sa;Password=${MSSQL_SA_PASSWORD:-YourStrong!Pass123};TrustServerCertificate=True
+      - ASPNETCORE_ENVIRONMENT=Production
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 120M
+
+  ops-service:
+    build:
+      context: .
+      dockerfile: HospitalMS.HospitalOpsService.API/Dockerfile
+    environment:
+      - ConnectionStrings__OpsDb=Server=db;Database=HospitalMS_OpsDB;User Id=sa;Password=${MSSQL_SA_PASSWORD:-YourStrong!Pass123};TrustServerCertificate=True
+      - ASPNETCORE_ENVIRONMENT=Production
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 120M
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: HospitalMS.NotificationService.API/Dockerfile
+    environment:
+      - ConnectionStrings__NotificationDb=Server=db;Database=HospitalMS_NotificationDB;User Id=sa;Password=${MSSQL_SA_PASSWORD:-YourStrong!Pass123};TrustServerCertificate=True
+      - ASPNETCORE_ENVIRONMENT=Production
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 120M
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: HospitalMS.ApiGateway/Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Docker
+    depends_on:
+      - auth-service
+      - patient-service
+      - ops-service
+      - notification-service
+    deploy:
+      resources:
+        limits:
+          memory: 120M

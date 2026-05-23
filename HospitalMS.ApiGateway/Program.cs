@@ -4,7 +4,8 @@ using Ocelot.Middleware;
 var builder = WebApplication.CreateBuilder(args);
 
 // ■■ 1. Load ocelot.json (routing config) ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-builder.Configuration.AddJsonFile("ocelot.json", optional: false, reloadOnChange: true);
+var ocelotConfig = builder.Environment.IsEnvironment("Docker") ? "ocelot.Docker.json" : "ocelot.json";
+builder.Configuration.AddJsonFile(ocelotConfig, optional: false, reloadOnChange: true);
 
 // ■■ 2. Register Ocelot ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 builder.Services.AddOcelot();

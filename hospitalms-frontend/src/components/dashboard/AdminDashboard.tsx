@@ -14,7 +14,7 @@ import { useNotifications } from '../../context/NotificationContext';
 
 const AdminDashboard: React.FC = () => {
   const location = useLocation();
-  const { addToast } = useNotifications();
+  const { addToast, hasUnreadInSection } = useNotifications();
   const [users, setUsers] = useState<any[]>([]);
   const [doctorsList, setDoctorsList] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
@@ -242,7 +242,11 @@ const AdminDashboard: React.FC = () => {
 
   const renderDashboard = () => (
     <div className="space-y-8">
-      <PageHeader title="Hospital Overview" subtitle="System-wide metrics and status monitoring" />
+      <PageHeader 
+        title="Hospital Overview" 
+        subtitle="System-wide metrics and status monitoring" 
+        hasAlert={hasUnreadInSection('Dashboard')}
+      />
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Active Personnel" value={activeStaff.length + ghostDoctors.length} icon={<Users />} color="blue" />
@@ -293,7 +297,11 @@ const AdminDashboard: React.FC = () => {
     <div className="space-y-12">
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-            <PageHeader title="Staff Personnel" subtitle="Manage hospital staff and clinical specialists" />
+            <PageHeader 
+                title="Staff Personnel" 
+                subtitle="Manage hospital staff and clinical specialists" 
+                hasAlert={hasUnreadInSection('Staff')}
+            />
             <Button onClick={() => setAddModalOpen(true)}><Plus className="w-4 h-4" /> Register Staff</Button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -328,7 +336,11 @@ const AdminDashboard: React.FC = () => {
   const renderBeds = () => (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
-        <PageHeader title="Facility Management" subtitle="Monitor and update hospital bed availability" />
+        <PageHeader 
+            title="Facility Management" 
+            subtitle="Monitor and update hospital bed availability" 
+            hasAlert={hasUnreadInSection('Beds')}
+        />
         <Button onClick={() => setBedModalOpen(true)} className="bg-violet-600 hover:bg-violet-700 shadow-lg shadow-violet-500/10">
           <Plus className="w-4 h-4" /> Add New Bed
         </Button>
@@ -358,7 +370,11 @@ const AdminDashboard: React.FC = () => {
 
   const renderPharmacy = () => (
     <div className="space-y-8">
-      <PageHeader title="Pharmacy Oversight" subtitle="Global inventory monitoring and stock levels" />
+      <PageHeader 
+        title="Pharmacy Oversight" 
+        subtitle="Global inventory monitoring and stock levels" 
+        hasAlert={hasUnreadInSection('Pharmacy')}
+      />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {medicines.map(m => (
           <Card key={m.id} className="p-5 border-none shadow-sm bg-white flex items-center justify-between">
@@ -382,7 +398,11 @@ const AdminDashboard: React.FC = () => {
 
   const renderBilling = () => (
     <div className="space-y-8">
-      <PageHeader title="Financial Records" subtitle="Track pending payments and hospital revenue" />
+      <PageHeader 
+        title="Financial Records" 
+        subtitle="Track pending payments and hospital revenue" 
+        hasAlert={hasUnreadInSection('Billing')}
+      />
       <Card className="p-0 border-none shadow-sm bg-white overflow-hidden">
         <table className="w-full text-left">
            <thead className="bg-zinc-50/50">
@@ -410,7 +430,11 @@ const AdminDashboard: React.FC = () => {
 
   const renderAnalytics = () => (
     <div className="space-y-8">
-      <PageHeader title="Hospital Analytics" subtitle="Data-driven insights for hospital operations" />
+      <PageHeader 
+        title="Hospital Analytics" 
+        subtitle="Data-driven insights for hospital operations" 
+        hasAlert={hasUnreadInSection('Analytics')}
+      />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card title="Activity Stats">
           <div className="h-64 flex items-center justify-center bg-zinc-50 border border-dashed border-zinc-200 rounded-3xl text-zinc-400 text-sm">

@@ -4,6 +4,9 @@ namespace HospitalMS.HospitalOpsService.Application.DTOs;
 public class GenerateBillDto
 {
     public int PatientId { get; set; }
+    public string? PatientName { get; set; }
+    public string? PatientPhone { get; set; }
+    public int PatientAge { get; set; }
     public int? AdmissionId { get; set; }
     public int? PrescriptionId { get; set; }
     public decimal ConsultationCharge { get; set; }

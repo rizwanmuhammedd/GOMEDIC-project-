@@ -45,6 +45,16 @@ public class DoctorsController : ControllerBase
         return Ok(doctor);
     }
 
+    [HttpGet("user/batch")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetByUserIds([FromQuery] string userIds)
+    {
+        if (string.IsNullOrEmpty(userIds)) return BadRequest();
+        var idList = userIds.Split(',').Select(int.Parse).ToList();
+        var doctors = await _doctorService.GetByUserIdsAsync(idList);
+        return Ok(doctors);
+    }
+
     [HttpGet("me")]
     [Authorize(Roles = "Doctor")]
     public async Task<IActionResult> GetMyProfile()

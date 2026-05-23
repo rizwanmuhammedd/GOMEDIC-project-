@@ -22,6 +22,10 @@ const BASE = 'http://localhost:5000';
 async function apiFetch<T>(path: string, token?: string): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  
+  const tenantId = localStorage.getItem('hms_tenant_id');
+  if (tenantId) headers['X-Tenant-Id'] = tenantId;
+
   const res = await fetch(`${BASE}${path}`, { headers });
   if (!res.ok) throw new Error(`${res.status}`);
   return res.json();
@@ -695,11 +699,10 @@ function useLiveData(token?: string) {
 //  MAIN HOME PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 const Home: React.FC = () => {
-  const auth = useAuth() as any;
+  const { isAuthenticated, user, token, tenant } = useAuth() as any;
   const navigate = useNavigate();
-  const isAuth = auth.isAuthenticated as boolean;
-  const user = auth.user;
-  const token = auth.token ?? auth.user?.token;
+  const isAuth = isAuthenticated as boolean;
+  const hospitalName = tenant?.name || 'GOMEDIC';
 
   const [bookOpen, setBookOpen] = useState(false);
   const [initDept, setInitDept] = useState<number | null>(null);
@@ -877,7 +880,7 @@ const Home: React.FC = () => {
                  <div className="bg-white rounded-[2px]"></div><div className="bg-white rounded-[2px]"></div>
                  <div className="bg-white rounded-[2px]"></div><div className="bg-white rounded-[2px]"></div>
              </div>
-             <span className="text-[20px] font-bold tracking-tight text-zinc-900 flex items-center gap-1">GOMEDIC</span>
+             <span className="text-[20px] font-bold tracking-tight text-zinc-900 flex items-center gap-1 uppercase">{hospitalName}</span>
           </div>
 
           <nav className="hidden md:flex flex-none items-center justify-center gap-10">
@@ -909,7 +912,7 @@ const Home: React.FC = () => {
              {/* The massive background text */}
              <div className="absolute inset-0 flex items-start pt-10 justify-center z-10 pointer-events-none">
                  <span className="text-[140px] md:text-[180px] font-black text-white/50 tracking-tighter leading-none mix-blend-overlay uppercase">
-                    GOMEDIC
+                    {hospitalName}
                  </span>
              </div>
              
@@ -975,15 +978,15 @@ const Home: React.FC = () => {
                <div key={doc.id} className="bg-[#F8FCFA] border border-zinc-100 rounded-[28px] overflow-hidden flex flex-col pt-6 hover:shadow-lg transition-shadow duration-300 relative group">
                   
                   {/* Avatar section */}
-                  <div className="px-6 relative h-40 flex justify-center items-end">
+                  <div className="px-4 relative h-60 flex justify-center items-center">
                       {doc.profileImageUrl ? (
-                          <img src={doc.profileImageUrl.startsWith('http') ? doc.profileImageUrl : `${BASE}${doc.profileImageUrl}`} className="h-40 w-40 object-cover object-top rounded-full bg-white border-4 border-white shadow-sm absolute bottom-0" alt={doc.fullName} />
+                          <img src={doc.profileImageUrl.startsWith('http') ? doc.profileImageUrl : `${BASE}${doc.profileImageUrl}`} className="h-full w-full object-cover object-top rounded-[24px] bg-white border-4 border-white shadow-md transition-transform duration-500 group-hover:scale-[1.02]" alt={doc.fullName} />
                       ) : (
-                          <div className="h-40 w-40 bg-zinc-200 border-4 border-white rounded-full flex items-center justify-center text-4xl font-bold text-zinc-400 shadow-sm absolute bottom-0">{(doc.fullName||'D')[0]}</div>
+                          <div className="h-full w-full bg-zinc-100 rounded-[24px] flex items-center justify-center text-5xl font-black text-zinc-300 border-4 border-white shadow-md">{(doc.fullName||'D')[0]}</div>
                       )}
                   </div>
                   
-                  <div className="bg-white rounded-t-[28px] mt-4 flex-1 flex flex-col p-6 w-full border-t border-zinc-50">
+                  <div className="bg-white rounded-t-[32px] -mt-8 relative z-10 flex-1 flex flex-col p-6 w-full shadow-[0_-12px_24px_rgba(0,0,0,0.02)]">
                      <h4 className="text-[18px] font-bold text-zinc-900 leading-tight mb-1">{(doc.fullName || '').toLowerCase().startsWith('dr.') ? doc.fullName : `Dr. ${doc.fullName}`}</h4>
                      <p className="text-[13px] text-zinc-500 font-medium mb-4">{doc.specialization}</p>
                      
@@ -1030,7 +1033,7 @@ const Home: React.FC = () => {
                         <div>
                            <h4 className="font-bold text-zinc-900 text-[16px] mb-1">Our Location</h4>
                            <p className="text-zinc-500 text-[14px] leading-relaxed">
-                              HealthBridge Medical Center<br/>
+                              {hospitalName} Medical Center<br/>
                               123 Healthcare Ave, Manhattan<br/>
                               New York, NY 10001
                            </p>
@@ -1185,10 +1188,10 @@ const Home: React.FC = () => {
          </div>
          <div className="relative z-10 max-w-[1400px] mx-auto px-6 pt-8 border-t border-white/10 flex justify-between items-center text-[12px]">
             <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-[8px] text-white">G</div>
-                <span className="text-white font-semibold">GOMEDIC</span>
+                <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-[8px] text-white">{hospitalName[0]}</div>
+                <span className="text-white font-semibold uppercase">{hospitalName}</span>
             </div>
-            <p>&copy; 2026 GOMEDIC Technologies</p>
+            <p>&copy; 2026 {hospitalName} Technologies</p>
          </div>
       </footer>
 

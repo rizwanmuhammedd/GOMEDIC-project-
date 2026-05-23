@@ -11,6 +11,7 @@ public interface IBillService
     Task<BillDto> ProcessOnlinePaymentAsync(int billId);
     Task<List<BillDto>> GetByPatientAsync(int patientId);
     Task<List<BillDto>> GetPendingAsync();
+    Task<List<BillDto>> GetAllAsync();
     Task<BillDto?> GetByIdAsync(int id);
     Task<BillDto?> GetByPrescriptionIdAsync(int prescriptionId);
     Task SendPaymentReminderAsync(int billId);

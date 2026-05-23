@@ -64,7 +64,9 @@ const AuthenticatedLayout: React.FC = () => {
   );
 };
 
-function AppContent() {
+const AppContent = () => {
+  const { user } = useAuth();
+  
   return (
     <Routes>
       <Route path="/" element={<Home />} />
@@ -85,7 +87,10 @@ function AppContent() {
         <Route path="/pharmacy" element={<DashboardRouter />} />
         <Route path="/beds" element={<DashboardRouter />} />
         <Route path="/analytics" element={<DashboardRouter />} />
-        <Route path="/schedule" element={<DoctorSchedulePage />} />
+        <Route 
+          path="/schedule" 
+          element={user?.role === 'Receptionist' ? <DashboardRouter /> : <DoctorSchedulePage />} 
+        />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
 

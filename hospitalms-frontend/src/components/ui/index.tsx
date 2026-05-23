@@ -105,10 +105,18 @@ export const EmptyState: React.FC<any> = ({ icon, title, description }) => (
   </div>
 );
 
-export const PageHeader: React.FC<any> = ({ title, subtitle, action }) => (
+export const PageHeader: React.FC<any> = ({ title, subtitle, action, hasAlert }) => (
   <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4 border-b border-zinc-200 pb-5">
-    <div>
-      <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{title}</h1>
+    <div className="relative">
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{title}</h1>
+        {hasAlert && (
+          <div className="relative flex h-3 w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 shadow-lg shadow-red-500/50 border border-white"></span>
+          </div>
+        )}
+      </div>
       {subtitle && <p className="text-zinc-500 text-[14px] mt-1.5">{subtitle}</p>}
     </div>
     {action}

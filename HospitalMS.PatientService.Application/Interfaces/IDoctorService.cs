@@ -8,6 +8,7 @@ public interface IDoctorService
     Task<List<DoctorDto>> GetAllAsync();
     Task<DoctorDto?> GetByIdAsync(int id);
     Task<DoctorDto?> GetByUserIdAsync(int userId);
+    Task<List<DoctorDto>> GetByUserIdsAsync(IEnumerable<int> userIds);
     Task<DoctorDto> GetOrCreateByUserIdAsync(int userId, string fullName);
     Task<List<DoctorDto>> GetByDepartmentAsync(int deptId);
     Task<DoctorDto> CreateAsync(CreateDoctorDto dto);

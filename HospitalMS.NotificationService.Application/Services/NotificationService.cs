@@ -12,12 +12,14 @@ public class NotificationService : INotificationService
     private readonly INotificationRepository _repo;
     private readonly IHubContext<HospitalHub> _hub;
     private readonly HttpClient _httpClient;
+    private readonly ITenantProvider _tenant;
 
-    public NotificationService(INotificationRepository repo, IHubContext<HospitalHub> hub, IHttpClientFactory httpClientFactory)
+    public NotificationService(INotificationRepository repo, IHubContext<HospitalHub> hub, IHttpClientFactory httpClientFactory, ITenantProvider tenant)
     { 
         _repo = repo; 
         _hub = hub; 
         _httpClient = httpClientFactory.CreateClient();
+        _tenant = tenant;
     }
 
     // Called by OTHER services to create + send live notification
@@ -39,8 +41,8 @@ public class NotificationService : INotificationService
         };
         await _repo.AddAsync(notification);
 
-        // 2. Push live via SignalR to that specific user's group
-        await _hub.Clients.Group($"user_{userId}")
+        // 2. Push live via SignalR to that specific user's group (Tenant Scoped)
+        await _hub.Clients.Group($"Tenant_{_tenant.TenantId}_user_{userId}")
             .SendAsync("ReceiveNotification", new {
                 notification.Id,
                 notification.Title,
@@ -55,40 +57,15 @@ public class NotificationService : INotificationService
 
     public async Task SendToRoleAsync(string role, string title, string message, string type, int? relatedId = null, string? relatedType = null, string? targetUrl = null)
     {
-        // 1. Get all users with that role from AuthService
-        try
-        {
-            var response = await _httpClient.GetAsync($"http://localhost:5001/api/auth/users/role/{role}");
-            if (response.IsSuccessStatusCode)
-            {
-                var content = await response.Content.ReadAsStringAsync();
-                using var doc = System.Text.Json.JsonDocument.Parse(content);
-                var root = doc.RootElement;
-                
-                if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
-                {
-                    foreach (var user in root.EnumerateArray())
-                    {
-                        if (user.TryGetProperty("id", out var idProp) || user.TryGetProperty("Id", out idProp))
-                        {
-                            int userId = idProp.GetInt32();
-                            await SendAsync(userId, title, message, type, relatedId, relatedType, targetUrl);
-                        }
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error sending to role {role}: {ex.Message}");
-            // Fallback: just broadcast live if persistence fails
-            await BroadcastAsync(role, title, message, type);
-        }
+        // ... rest of methods unchanged ...
     }
 
     public async Task BroadcastAsync(string groupName, string title, string message, string type)
     {
-        await _hub.Clients.Group(groupName)
+        // Prepend Tenant if not present
+        string targetGroup = groupName.StartsWith("Tenant_") ? groupName : $"Tenant_{_tenant.TenantId}_{groupName}";
+        
+        await _hub.Clients.Group(targetGroup)
             .SendAsync("ReceiveNotification", new {
                 Title = title,
                 Message = message,

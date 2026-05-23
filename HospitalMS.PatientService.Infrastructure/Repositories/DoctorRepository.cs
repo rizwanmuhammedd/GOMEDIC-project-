@@ -32,6 +32,12 @@ public class DoctorRepository : IDoctorRepository
                .Include(d => d.Department)
                .FirstOrDefaultAsync(d => d.UserId == userId);
 
+    public async Task<List<Doctor>> GetByUserIdsAsync(IEnumerable<int> userIds)
+        => await _db.Doctors
+               .Include(d => d.Department)
+               .Where(d => userIds.Contains(d.UserId))
+               .ToListAsync();
+
     public async Task<Doctor> AddAsync(Doctor doctor)
     {
         _db.Doctors.Add(doctor);

@@ -17,11 +17,20 @@ public class TenantProvider : ITenantProvider
     {
         get
         {
+            // 1. Check JWT Claim (Most Secure)
             var tenantIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst("TenantId");
             if (tenantIdClaim != null && int.TryParse(tenantIdClaim.Value, out int tenantId))
             {
                 return tenantId;
             }
+
+            // 2. Check Header (For Public/Anonymous Landing Pages)
+            var headerValue = _httpContextAccessor.HttpContext?.Request.Headers["X-Tenant-Id"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(headerValue) && int.TryParse(headerValue, out int headerTenantId))
+            {
+                return headerTenantId;
+            }
+
             return 1; // Default/fallback tenant
         }
     }

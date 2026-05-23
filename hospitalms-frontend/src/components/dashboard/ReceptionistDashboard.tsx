@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PageHeader, Card, EmptyState, Badge, LoadingSpinner, Button, statusBadge, Modal, Input, Select } from '../ui';
-import { Calendar, Receipt, Search, BedDouble, ArrowRight, Activity, Plus } from 'lucide-react';
+import { Calendar, Receipt, Search, BedDouble, ArrowRight, Activity, Plus, FileText } from 'lucide-react';
 import api, { appointmentApi, prescriptionApi, doctorApi, bedApi, admissionApi, vitalsApi } from '../../api/axiosInstance';
 import { useNotifications } from '../../context/NotificationContext';
 import { EnquiryChat } from '../chat/EnquiryChat';
 import { useSignalR } from '../../hooks/useSignalR';
 
 export const ReceptionistDashboard = () => {
-    const { addToast } = useNotifications();
+    const { addToast, hasUnreadInSection } = useNotifications();
     const location = useLocation();
     const [appointments, setAppointments] = useState<any[]>([]);
     const [bills, setBills] = useState<any[]>([]);
     const [prescriptions, setPrescriptions] = useState<any[]>([]);
     const [doctors, setDoctors] = useState<any[]>([]);
+    const [doctorAvailabilities, setDoctorAvailabilities] = useState<Record<number, any>>({});
     const [loading, setLoading] = useState(true);
     const [genModalOpen, setGenModalOpen] = useState(false);
     const [payModalOpen, setPayModalOpen] = useState(false);
@@ -23,6 +24,7 @@ export const ReceptionistDashboard = () => {
 
     const [apptSearchTerm, setApptSearchTerm] = useState('');
     const [billSearchTerm, setBillSearchTerm] = useState('');
+    const [admissionSearchTerm, setAdmissionSearchTerm] = useState('');
     const [beds, setBeds] = useState<any[]>([]);
     const [activeAdmissions, setActiveAdmissions] = useState<any[]>([]);
     const [pendingAdmissions, setPendingAdmissions] = useState<any[]>([]);
@@ -72,7 +74,7 @@ export const ReceptionistDashboard = () => {
                 formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
             }
 
-            await api.post('/api/appointments', {
+            const res = await api.post('/api/appointments', {
                 patientId: 0, // Special ID for guest booking
                 patientName: bookForm.patientName,
                 patientAge: parseInt(bookForm.patientAge) || 0,
@@ -82,6 +84,7 @@ export const ReceptionistDashboard = () => {
                 appointmentTime: bookForm.time,
                 chiefComplaint: bookForm.chiefComplaint
             });
+            const newAppt = res.data;
             addToast({ type: 'success', title: 'Appointment Booked', message: `Manual booking for ${bookForm.patientName} successful.` });
             setManualBookOpen(false);
             setBookForm({
@@ -131,22 +134,40 @@ export const ReceptionistDashboard = () => {
 
     const loadData = useCallback(async () => {
         try {
+            const todayStr = new Date().toISOString().split('T')[0];
             const [apptRes, billRes, prescRes, docRes, bedRes, admRes, pendingRes] = await Promise.all([
                 appointmentApi.getAll(),
-                api.get('/api/bills/pending'),
+                api.get('/api/bills'),
                 prescriptionApi.getPending(),
                 doctorApi.getAll(),
                 bedApi.getAll(),
                 api.get('/api/admissions'),
                 api.get('/api/admissions/pending')
             ]);
+            
+            const docs = docRes.data || [];
             setAppointments(apptRes.data || []);
             setBills(billRes.data || []);
             setPrescriptions(prescRes.data || []);
-            setDoctors(docRes.data || []);
+            setDoctors(docs);
             setBeds(bedRes.data || []);
             setActiveAdmissions(admRes.data || []);
             setPendingAdmissions(pendingRes.data || []);
+
+            // Fetch today's availability for each doctor
+            const availPromises = docs.map(async (d: any) => {
+                try {
+                    const res = await api.get(`/api/appointments/slots/${d.id}?date=${todayStr}`);
+                    return { id: d.id, slots: res.data.availableSlots || [] };
+                } catch {
+                    return { id: d.id, slots: [] };
+                }
+            });
+            const avails = await Promise.all(availPromises);
+            const availMap: Record<number, any> = {};
+            avails.forEach(a => { availMap[a.id] = a.slots; });
+            setDoctorAvailabilities(availMap);
+
         } catch (err) {
             console.error("Receptionist Data Load Failed", err);
         } finally { 
@@ -275,7 +296,11 @@ export const ReceptionistDashboard = () => {
         
         return (
             <div className="space-y-8">
-                <PageHeader title="Facility & Ward Monitoring" subtitle="Track live bed occupancy and manage ward availability" />
+                <PageHeader 
+                    title="Facility & Ward Monitoring" 
+                    subtitle="Track live bed occupancy and manage ward availability" 
+                    hasAlert={hasUnreadInSection('Admissions')}
+                />
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <Card className="p-4 border-none shadow-sm bg-emerald-50">
@@ -342,54 +367,75 @@ export const ReceptionistDashboard = () => {
 
                 {/* ADMITTED PATIENTS LIST */}
                 <Card title="Live Admitted Patients (Inpatient Registry)">
-                    {activeAdmissions.length === 0 ? (
-                        <div className="py-12 text-center text-zinc-400 text-sm italic border border-dashed border-zinc-200 rounded-xl">No active admissions currently recorded.</div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-zinc-50 border-b border-zinc-100">
-                                    <tr>
-                                        <th className="p-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Patient Name</th>
-                                        <th className="p-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">Bed</th>
-                                        <th className="p-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">Ward</th>
-                                        <th className="p-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-zinc-50">
-                                    {activeAdmissions.map(adm => (
-                                        <tr key={adm.id} className="hover:bg-zinc-50/50 transition-colors">
-                                            <td className="p-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold text-[11px]">
-                                                        {adm.patientName?.charAt(0) || 'P'}
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-[13px] font-bold text-zinc-900">{adm.patientName}</p>
-                                                        <p className="text-[10px] text-zinc-500">{adm.patientAge > 0 ? `${adm.patientAge}y &bull; ` : ''}ID #{adm.patientId} &bull; {adm.patientPhone || 'No Phone'}</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <Badge variant="secondary" className="bg-zinc-100 text-zinc-700 font-black">{adm.bedNumber || '---'}</Badge>
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <span className="text-[12px] font-medium text-zinc-600">{adm.wardType}</span>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <div className="flex flex-col items-end">
-                                                    <p className="text-[12px] font-bold text-zinc-800">{new Date(adm.admissionDate).toLocaleDateString()}</p>
-                                                    <div className="flex gap-2 mt-2">
-                                                        <Button size="sm" variant="secondary" onClick={() => { setSelectedAdmission(adm); fetchVitals(adm.id); setVitalsOpen(true); }}><Activity className="w-3 h-3 mr-1" /> Vitals</Button>
-                                                        <Button size="sm" variant="secondary" onClick={() => { setSelectedAdmission(adm); setDischargeModalOpen(true); }}>Discharge</Button>
-                                                    </div>
-                                                </div>
-                                            </td>
+                    <div className="mb-6 relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                        <input 
+                            type="text" 
+                            placeholder="Search admitted patient by name or ID..." 
+                            className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/5 focus:border-emerald-500 transition-all shadow-inner"
+                            value={admissionSearchTerm}
+                            onChange={(e) => setAdmissionSearchTerm(e.target.value)}
+                        />
+                    </div>
+
+                    {(() => {
+                        const filtered = activeAdmissions.filter(adm => 
+                            (adm.patientName || '').toLowerCase().includes(admissionSearchTerm.toLowerCase()) ||
+                            adm.patientId?.toString().includes(admissionSearchTerm) ||
+                            (adm.bedNumber || '').toLowerCase().includes(admissionSearchTerm.toLowerCase())
+                        );
+
+                        if (filtered.length === 0) {
+                            return <div className="py-12 text-center text-zinc-400 text-sm italic border border-dashed border-zinc-200 rounded-xl">{admissionSearchTerm ? "No matching patients found." : "No active admissions currently recorded."}</div>;
+                        }
+
+                        return (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead className="bg-zinc-50 border-b border-zinc-100">
+                                        <tr>
+                                            <th className="p-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Patient Name</th>
+                                            <th className="p-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">Bed</th>
+                                            <th className="p-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">Ward</th>
+                                            <th className="p-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-right">Actions</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                    </thead>
+                                    <tbody className="divide-y divide-zinc-50">
+                                        {filtered.map(adm => (
+                                            <tr key={adm.id} className="hover:bg-zinc-50/50 transition-colors">
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold text-[11px]">
+                                                            {adm.patientName?.charAt(0) || 'P'}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[13px] font-bold text-zinc-900">{adm.patientName}</p>
+                                                            <p className="text-[10px] text-zinc-500">{adm.patientAge > 0 ? `${adm.patientAge}y &bull; ` : ''}ID #{adm.patientId} &bull; {adm.patientPhone || 'No Phone'}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-center">
+                                                    <Badge variant="secondary" className="bg-zinc-100 text-zinc-700 font-black">{adm.bedNumber || '---'}</Badge>
+                                                </td>
+                                                <td className="p-4 text-center">
+                                                    <span className="text-[12px] font-medium text-zinc-600">{adm.wardType}</span>
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    <div className="flex flex-col items-end">
+                                                        <p className="text-[12px] font-bold text-zinc-800">{new Date(adm.admissionDate).toLocaleDateString()}</p>
+                                                        <div className="flex gap-2 mt-2">
+                                                            <Button size="sm" variant="secondary" onClick={() => { setSelectedAdmission(adm); fetchVitals(adm.id); setVitalsOpen(true); }}><Activity className="w-3 h-3 mr-1" /> Vitals</Button>
+                                                            <Button size="sm" variant="secondary" onClick={() => { setSelectedAdmission(adm); setDischargeModalOpen(true); }}>Discharge</Button>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        );
+                    })()}
                 </Card>
             </div>
         );
@@ -419,15 +465,25 @@ export const ReceptionistDashboard = () => {
             onConfirm: async () => {
                 setSubmitting(true);
                 try {
-                    await api.post('/api/bills', {
+                    const res = await api.post('/api/bills', {
                         patientId: selectedAppt.patientId,
+                        patientName: selectedAppt.patientName,
+                        patientPhone: selectedAppt.patientPhone,
+                        patientAge: selectedAppt.patientAge,
                         ...billForm,
                         consultationCharge: parseFloat(billForm.consultationCharge.toString()),
-                        medicineCharge: parseFloat(billForm.medicineCharge.toString())
+                        medicineCharge: parseFloat(billForm.medicineCharge.toString()),
+                        labCharge: parseFloat(billForm.labCharge.toString()),
+                        bedCharge: parseFloat(billForm.bedCharge.toString()),
+                        otherCharges: parseFloat(billForm.otherCharges.toString()),
+                        discount: parseFloat(billForm.discount.toString())
                     });
-                    addToast({ type: 'success', title: 'Bill Generated', message: 'Ready for payment collection' });
+                    const newBill = res.data;
+                    addToast({ type: 'success', title: 'Bill Generated', message: `Ledger created for ${selectedAppt.patientName}.` });
                     setGenModalOpen(false);
                     loadData();
+                    // Automatically trigger print/download for the new bill
+                    handleDownloadBill(newBill);
                 } catch (err: any) {
                     addToast({ type: 'error', title: 'Error', message: err.response?.data?.message || 'Generation failed' });
                 } finally { setSubmitting(false); }
@@ -450,14 +506,119 @@ export const ReceptionistDashboard = () => {
                         amount: parseFloat(payForm.amount.toString()),
                         paymentMethod: payForm.method
                     });
+                    
+                    const updatedBill = {
+                        ...selectedBill,
+                        paymentStatus: 'Paid',
+                        paidAmount: payForm.amount,
+                        balanceAmount: selectedBill.totalAmount - payForm.amount,
+                        paymentMethod: payForm.method,
+                        paidAt: new Date().toISOString()
+                    };
+
                     addToast({ type: 'success', title: 'Paid', message: 'Payment recorded successfully' });
                     setPayModalOpen(false);
                     loadData();
+                    
+                    // Auto-print receipt to prevent it being missed when it leaves the outstanding list
+                    handleDownloadBill(updatedBill);
                 } catch (err: any) {
                     addToast({ type: 'error', title: 'Error', message: err.response?.data?.message || 'Payment failed' });
                 } finally { setSubmitting(false); }
             }
         });
+    };
+
+    const handleDownloadBill = (b: any) => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Invoice ${b.billNumber || b.id}</title>
+                    <style>
+                        body { font-family: 'Inter', sans-serif; padding: 40px; color: #333; }
+                        .header { border-bottom: 2px solid #3b82f6; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end; }
+                        .hospital-name { font-size: 24px; font-weight: 800; color: #3b82f6; margin: 0; }
+                        .invoice-label { font-size: 32px; font-weight: 900; color: #eee; margin: 0; text-transform: uppercase; }
+                        .meta-info { margin-bottom: 40px; display: grid; grid-template-cols: 1fr 1fr; gap: 20px; }
+                        .meta-block h4 { font-size: 11px; text-transform: uppercase; color: #999; margin: 0 0 5px 0; }
+                        .meta-block p { font-weight: bold; margin: 0; }
+                        .line-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; font-size: 14px; }
+                        .total-section { margin-top: 30px; border-top: 2px solid #333; padding-top: 20px; }
+                        .total-row { display: flex; justify-content: space-between; padding: 10px 0; }
+                        .grand-total { font-size: 20px; font-weight: 900; background: #3b82f6; color: white; padding: 15px 20px; border-radius: 10px; margin-top: 10px; }
+                        .footer { margin-top: 100px; font-size: 11px; color: #999; text-align: center; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <div>
+                            <h1 class="hospital-name">GOMEDIC HOSPITAL</h1>
+                            <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Medical Billing Department</p>
+                        </div>
+                        <h2 class="invoice-label">Invoice</h2>
+                    </div>
+
+                    <div class="meta-info">
+                        <div class="meta-block">
+                            <h4>Billed To</h4>
+                            <p>${b.patientName}</p>
+                            <span style="font-size: 12px; color: #666;">Patient ID: #${b.patientId}</span>
+                        </div>
+                        <div class="meta-block" style="text-align: right">
+                            <h4>Invoice Details</h4>
+                            <p>${b.billNumber || 'DRAFT'}</p>
+                            <span style="font-size: 12px; color: #666;">Date: ${new Date(b.generatedAt || Date.now()).toLocaleDateString()}</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 40px">
+                        <div class="line-item" style="font-weight: bold; background: #f9fafb; padding: 12px;">
+                            <span>Description</span>
+                            <span>Amount</span>
+                        </div>
+                        ${b.consultationCharge > 0 ? `<div class="line-item"><span>Professional Consultation Fee</span><span>₹${b.consultationCharge}</span></div>` : ''}
+                        ${b.medicineCharge > 0 ? `<div class="line-item"><span>Pharmacy & Medication Overhead</span><span>₹${b.medicineCharge}</span></div>` : ''}
+                        ${b.labCharge > 0 ? `<div class="line-item"><span>Diagnostic Laboratory Services</span><span>₹${b.labCharge}</span></div>` : ''}
+                        ${b.bedCharge > 0 ? `<div class="line-item"><span>Room / Inpatient Accommodation</span><span>₹${b.bedCharge}</span></div>` : ''}
+                        ${b.otherCharges > 0 ? `<div class="line-item"><span>Ancillary Clinical Charges</span><span>₹${b.otherCharges}</span></div>` : ''}
+                    </div>
+
+                    <div class="total-section">
+                        <div class="total-row">
+                            <span style="color: #666">Subtotal</span>
+                            <span style="font-weight: bold">₹${(b.totalAmount || 0) + (b.discount || 0)}</span>
+                        </div>
+                        ${b.discount > 0 ? `<div class="total-row" style="color: #ef4444">
+                            <span>Hospital Discount</span>
+                            <span>- ₹${b.discount}</span>
+                        </div>` : ''}
+                        <div class="grand-total">
+                            <span>Invoice Total</span>
+                            <span>₹${b.totalAmount}</span>
+                        </div>
+                        <div class="total-row" style="margin-top: 10px; color: #10b981; font-weight: bold">
+                            <span>Amount Paid</span>
+                            <span>₹${b.paidAmount || 0}</span>
+                        </div>
+                        <div class="total-row">
+                            <span style="color: #666">Balance Due</span>
+                            <span style="font-weight: bold">₹${b.balanceAmount}</span>
+                        </div>
+                    </div>
+
+                    <div class="footer">
+                        <p>Payment Status: ${(b.paymentStatus || 'Pending').toUpperCase()}</p>
+                        ${b.paidAt ? `<p>Paid On: ${new Date(b.paidAt).toLocaleString()}</p>` : ''}
+                        <p style="margin-top: 20px">Thank you for choosing GOMEDIC Hospital. Wish you a speedy recovery.</p>
+                    </div>
+                    <script>window.print(); setTimeout(() => window.close(), 500);</script>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
     };
 
     const renderAppointments = (withHeader = false) => {
@@ -467,44 +628,63 @@ export const ReceptionistDashboard = () => {
             a.patientId?.toString().includes(apptSearchTerm)
         );
 
+        const onlineBooked = filtered.filter(a => a.patientId !== 0);
+        const manuallyBooked = filtered.filter(a => a.patientId === 0);
+
+        const ApptList = ({ list, emptyMsg }: { list: any[], emptyMsg: string }) => (
+            list.length === 0 ? <EmptyState icon={<Calendar strokeWidth={1.5} className="w-8 h-8" />} title={emptyMsg} /> :
+            <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
+                {list.map(a => (
+                    <div key={a.id} className="p-4 bg-[#FDFDFD] border border-zinc-200 rounded-[16px] flex justify-between items-center transition-shadow hover:shadow-sm">
+                        <div className="flex-1">
+                            <p className="text-[14px] font-bold tracking-tight text-zinc-900">{a.patientName}</p>
+                            <p className="text-[12px] text-zinc-500 font-medium">{(a.doctorName || '').toLowerCase().startsWith('dr.') ? a.doctorName : `Dr. ${a.doctorName}`} &bull; {a.appointmentTime}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <Badge variant={statusBadge(a.status)}>{a.status}</Badge>
+                            {(a.status === 'Completed' || a.status === 'Scheduled') && (
+                                <Button size="sm" variant="secondary" onClick={() => handleOpenGenBill(a)}>
+                                    {a.status === 'Scheduled' ? 'Check-in & Bill' : 'Create Bill'}
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-end">
-                    {withHeader && <PageHeader title="Patient Appointments" subtitle="Manage hospital check-ins and clinical scheduling" />}
+                    {withHeader && (
+                        <PageHeader 
+                            title="Patient Appointments" 
+                            subtitle="Manage hospital check-ins and clinical scheduling" 
+                            hasAlert={hasUnreadInSection('Appointments')}
+                        />
+                    )}
                     <Button onClick={() => setManualBookOpen(true)} className="mb-1 bg-zinc-900 hover:bg-zinc-800 text-[12px] h-10 px-6 rounded-xl shadow-lg shadow-zinc-200">
                         <Plus className="w-4 h-4 mr-2" /> Manual Booking
                     </Button>
                 </div>
-                <Card title="Today's Active Appointments">
-                    <div className="mb-4 relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                        <input 
-                            type="text" 
-                            placeholder="Search patient or doctor..." 
-                            className="w-full pl-10 pr-4 py-2 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                            value={apptSearchTerm}
-                            onChange={(e) => setApptSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    {filtered.length === 0 ? <EmptyState icon={<Calendar strokeWidth={1.5} className="w-8 h-8" />} title={apptSearchTerm ? "No matches found" : "No visits scheduled"} /> :
-                        <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
-                            {filtered.map(a => (
-                                <div key={a.id} className="p-4 bg-[#FDFDFD] border border-zinc-200 rounded-[16px] flex justify-between items-center transition-shadow hover:shadow-sm">
-                                    <div className="flex-1">
-                                        <p className="text-[14px] font-bold tracking-tight text-zinc-900">{a.patientName}</p>
-                                        <p className="text-[12px] text-zinc-500 font-medium">{(a.doctorName || '').toLowerCase().startsWith('dr.') ? a.doctorName : `Dr. ${a.doctorName}`} &bull; {a.appointmentTime}</p>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <Badge variant={statusBadge(a.status)}>{a.status}</Badge>
-                                        {a.status === 'Completed' && (
-                                            <Button size="sm" variant="secondary" onClick={() => handleOpenGenBill(a)}>Create Bill</Button>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    }
-                </Card>
+                <div className="mb-4 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                    <input 
+                        type="text" 
+                        placeholder="Search patient or doctor..." 
+                        className="w-full pl-10 pr-4 py-2 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        value={apptSearchTerm}
+                        onChange={(e) => setApptSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Card title="Online Booked Patients">
+                        <ApptList list={onlineBooked} emptyMsg={apptSearchTerm ? "No matches found" : "No online bookings"} />
+                    </Card>
+                    <Card title="Manually Booked Patients">
+                        <ApptList list={manuallyBooked} emptyMsg={apptSearchTerm ? "No matches found" : "No manual bookings"} />
+                    </Card>
+                </div>
             </div>
         );
     };
@@ -526,7 +706,13 @@ export const ReceptionistDashboard = () => {
 
         return (
             <div className="space-y-8">
-                {withHeader && <PageHeader title="Billing & Accounts" subtitle="Monitor revenue cycle and collect patient payments" />}
+                {withHeader && (
+                    <PageHeader 
+                        title="Billing & Accounts" 
+                        subtitle="Monitor revenue cycle and collect patient payments" 
+                        hasAlert={hasUnreadInSection('Billing')}
+                    />
+                )}
                 <Card title="Outstanding Ledger Accounts">
                     <div className="mb-4 relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
@@ -552,7 +738,10 @@ export const ReceptionistDashboard = () => {
                                             <span className="text-[11px] text-red-600 font-bold uppercase tracking-wider mt-0.5">Due: ₹{b.balanceAmount}</span>
                                         </div>
                                     </div>
-                                    <Button size="sm" onClick={() => { setSelectedBill(b); setPayForm({ amount: b.balanceAmount, method: 'Cash' }); setPayModalOpen(true); }}>Collect Cash</Button>
+                                    <div className="flex gap-2">
+                                        <Button size="sm" variant="secondary" onClick={() => handleDownloadBill(b)} title="Print Bill"><FileText className="w-4 h-4" /></Button>
+                                        <Button size="sm" onClick={() => { setSelectedBill(b); setPayForm({ amount: b.balanceAmount, method: 'Cash' }); setPayModalOpen(true); }}>Collect Cash</Button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -574,7 +763,10 @@ export const ReceptionistDashboard = () => {
                                             <span className="text-[11px] text-emerald-600 font-bold uppercase tracking-wider mt-0.5">Paid: ₹{b.totalAmount} via {b.paymentMethod}</span>
                                         </div>
                                     </div>
-                                    <Badge variant="success">Cleared</Badge>
+                                    <div className="flex items-center gap-3">
+                                        <Button size="sm" variant="secondary" onClick={() => handleDownloadBill(b)} title="Print Receipt"><FileText className="w-4 h-4" /></Button>
+                                        <Badge variant="success">Cleared</Badge>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -588,7 +780,11 @@ export const ReceptionistDashboard = () => {
 
     const renderDashboardOverview = () => (
         <div className="space-y-10">
-            <PageHeader title="Reception Overview" subtitle="Quick look at today's hospital operations and front-desk flow" />
+            <PageHeader 
+                title="Reception Overview" 
+                subtitle="Quick look at today's hospital operations and front-desk flow" 
+                hasAlert={hasUnreadInSection('Dashboard')}
+            />
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card className="p-6 border-none shadow-sm bg-white">
@@ -616,14 +812,124 @@ export const ReceptionistDashboard = () => {
         </div>
     );
 
+    const renderSchedules = () => {
+        const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        
+        return (
+            <div className="space-y-8">
+                <div className="flex justify-between items-end">
+                    <PageHeader 
+                        title="Doctor Daily Schedules" 
+                        subtitle={`Live availability tracking for ${today}`} 
+                        hasAlert={hasUnreadInSection('Schedules')}
+                    />
+                    <Badge variant="info" className="mb-1 h-8 px-4 flex items-center gap-2">
+                        <Activity className="w-3.5 h-3.5" /> Synchronized
+                    </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {doctors.map(doc => {
+                        const slots = doctorAvailabilities[doc.id] || [];
+                        const booked = slots.filter((s: string) => s.endsWith('::booked')).length;
+                        const free = slots.length - booked;
+                        
+                        return (
+                            <Card key={doc.id} className="p-0 border-none shadow-sm bg-white overflow-hidden group">
+                                <div className="p-5 border-b border-zinc-50 flex justify-between items-start bg-zinc-50/30">
+                                    <div className="flex gap-4 items-center">
+                                        <div className="w-12 h-12 rounded-2xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-900 text-lg font-black shadow-sm group-hover:scale-105 transition-transform">
+                                            {doc.profileImageUrl ? (
+                                                <img src={doc.profileImageUrl} alt="" className="w-full h-full object-cover rounded-2xl" />
+                                            ) : (doc.fullName || 'D').charAt(0)}
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-zinc-900">{(doc.fullName || '').toLowerCase().startsWith('dr.') ? doc.fullName : `Dr. ${doc.fullName}`}</h4>
+                                            <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-wider">{doc.departmentName || 'Specialist'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <Badge variant={free > 0 ? 'success' : 'danger'}>
+                                            {free > 0 ? `${free} Slots Free` : 'Fully Booked'}
+                                        </Badge>
+                                    </div>
+                                </div>
+                                <div className="p-5">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Today's Timeline</span>
+                                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{booked} Booked / {slots.length} Total</span>
+                                    </div>
+                                    
+                                    {slots.length === 0 ? (
+                                        <div className="py-6 text-center text-zinc-400 text-[12px] italic border border-dashed border-zinc-100 rounded-xl">No active shift today.</div>
+                                    ) : (
+                                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                                            {slots.map((s: string, i: number) => {
+                                                const isBooked = s.endsWith('::booked');
+                                                const time = isBooked ? s.split('::')[0] : s;
+                                                return (
+                                                    <div 
+                                                        key={i} 
+                                                        className={`py-2 rounded-lg text-center text-[10px] font-bold border transition-all ${
+                                                            isBooked 
+                                                            ? 'bg-zinc-50 border-zinc-100 text-zinc-300' 
+                                                            : 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                                                        }`}
+                                                    >
+                                                        {time}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    <div className="mt-6 flex gap-2">
+                                        <Button 
+                                            size="sm" 
+                                            className="flex-1 bg-zinc-900 text-[11px]" 
+                                            onClick={() => {
+                                                setBookForm({ ...bookForm, doctorId: doc.id.toString(), date: new Date().toISOString().split('T')[0] });
+                                                fetchSlots(doc.id, new Date().toISOString().split('T')[0]);
+                                                setManualBookOpen(true);
+                                            }}
+                                        >
+                                            Quick Book
+                                        </Button>
+                                    </div>
+                                </div>
+                            </Card>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+
     const renderContent = () => {
         const path = location.pathname.toLowerCase();
         
         if (path.includes('/appointments')) return renderAppointments(true);
         if (path.includes('/admissions')) return renderWardManagement();
         if (path.includes('/billing')) return renderBills(true);
+        if (path.includes('/schedule')) return renderSchedules();
         
-        return renderDashboardOverview();
+        return (
+            <div className="space-y-12">
+                {renderDashboardOverview()}
+                
+                {/* DOCTOR SCHEDULES QUICK VIEW */}
+                <div className="pt-4 border-t border-zinc-100">
+                    <div className="flex items-center justify-between mb-8">
+                         <div>
+                            <h2 className="text-xl font-bold text-zinc-900 tracking-tight">Today's Doctor Availability</h2>
+                            <p className="text-[13px] text-zinc-500 font-medium">Real-time tracking of clinical shifts and appointment slots</p>
+                         </div>
+                         <Button variant="secondary" size="sm" onClick={() => window.location.pathname = '/schedule'}>Detailed View</Button>
+                    </div>
+                    {renderSchedules()}
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -826,17 +1132,6 @@ export const ReceptionistDashboard = () => {
                 )}
             </Modal>
 
-            {/* ENQUIRY CHAT SECTION */}
-            <div className="pt-6">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <h2 className="text-xl font-bold text-zinc-900 tracking-tight">Patient Enquiry Desk</h2>
-                        <p className="text-[13px] text-zinc-500 font-medium">Real-time communication with patients</p>
-                    </div>
-                </div>
-                <EnquiryChat />
-            </div>
-
             <Modal isOpen={vitalsOpen} onClose={() => setVitalsOpen(false)} title={`Clinical Vitals - ${selectedAdmission?.patientName || 'Patient'}`} size="lg">
                 <div className="space-y-6">
                     <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 flex justify-between items-center">
@@ -974,7 +1269,7 @@ export const ReceptionistDashboard = () => {
                             {!bookForm.doctorId ? (
                                 <p className="text-[10px] text-zinc-400 italic">Select a doctor first to see availability.</p>
                             ) : availableSlots.length === 0 ? (
-                                <p className="text-[10px] text-red-500 font-bold">No slots available for this date.</p>
+                                <p className="text-[10px] text-red-500 font-bold">Today no schedules for this doctor on selected date.</p>
                             ) : null}
                         </div>
                     </div>

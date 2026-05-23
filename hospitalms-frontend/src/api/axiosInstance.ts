@@ -2,7 +2,7 @@
 import axios from 'axios';
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 const TOKEN_KEY = 'hms_token';
 
 const api = axios.create({
@@ -16,6 +16,24 @@ api.interceptors.request.use(
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Dynamic Multi-Tenant Subdomain resolution
+    const hostname = window.location.hostname;
+    // Example: apollo.gomedic.com or cityhospital.localhost
+    const parts = hostname.split('.');
+    if (parts.length > 2 || (parts.length === 2 && hostname.includes('localhost'))) {
+        const subdomain = parts[0];
+        if (subdomain !== 'www' && config.headers) {
+            config.headers['X-Tenant-Subdomain'] = subdomain;
+        }
+    }
+
+    // Add Tenant ID if known (helps for public endpoints)
+    const storedTenantId = localStorage.getItem('hms_tenant_id');
+    if (storedTenantId && config.headers) {
+        config.headers['X-Tenant-Id'] = storedTenantId;
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -49,6 +67,7 @@ export const authApi = {
   deleteUser: (id: number) => api.delete(`/api/auth/users/${id}`),
   restoreUser: (id: number) => api.post(`/api/auth/users/${id}/restore`),
   updateProfile: (data: any) => api.patch('/api/auth/profile', data),
+  resolveTenant: (subdomain: string) => api.get(`/api/auth/tenants/resolve/${subdomain}`),
   uploadPicture: (file: File, updateProfile: boolean = false) => {
     const formData = new FormData();
     formData.append('File', file);
@@ -163,6 +182,8 @@ export const adminApi = {
 export const chatApi = {
   getHistory: (patientId?: string) => api.get('/api/chat/history', { params: { patientId } }),
   markAsRead: (patientId: string) => api.patch(`/api/chat/read/${patientId}`),
+  markHospitalAsRead: (patientId: string) => api.patch(`/api/chat/read-hospital/${patientId}`),
+  getUnreadCount: () => api.get('/api/chat/unread-count'),
 };
 
 

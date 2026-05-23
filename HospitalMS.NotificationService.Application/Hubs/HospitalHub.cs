@@ -18,7 +18,7 @@ public class HospitalHub : Hub
 
     public override async Task OnConnectedAsync()
     {
-        // Try multiple claim types for role to be robust
+        // Try multiple claim types for role and tenant to be robust
         var role = Context.User?.FindFirst(ClaimTypes.Role)?.Value ?? 
                    Context.User?.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value ??
                    Context.User?.FindFirst("role")?.Value ?? "Patient";
@@ -26,30 +26,30 @@ public class HospitalHub : Hub
         var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
                      Context.User?.FindFirst("sub")?.Value;
 
-        // Join group for their role (e.g., Admin, Doctor, Receptionist)
-        await Groups.AddToGroupAsync(Context.ConnectionId, role);
+        var tenantIdStr = Context.User?.FindFirst("TenantId")?.Value ?? "1";
+
+        // Join tenant-scoped role group (e.g., Tenant_1_Receptionist)
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"Tenant_{tenantIdStr}_{role}");
         
-        // Join private group for their specific user ID
+        // Join tenant-scoped private group for their specific user ID
         if (!string.IsNullOrEmpty(userId))
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userId}");
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"Tenant_{tenantIdStr}_user_{userId}");
         }
 
         await base.OnConnectedAsync();
     }
 
-    public override async Task OnDisconnectedAsync(Exception? exception)
-    {
-        await base.OnDisconnectedAsync(exception);
-    }
+    private string GetTenantId() => Context.User?.FindFirst("TenantId")?.Value ?? "1";
 
-    // Patient sends enquiry to all receptionists
+    // Patient sends enquiry to all receptionists in THEIR hospital
     public async Task SendEnquiry(string patientName, string message)
     {
         var patientId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? 
                         Context.User?.FindFirst("sub")?.Value;
 
         if (string.IsNullOrEmpty(patientId)) return;
+        var tenantId = GetTenantId();
 
         // Check if blocked
         if (await _chatRepo.IsUserBlockedAsync(patientId))
@@ -72,7 +72,8 @@ public class HospitalHub : Hub
             PatientName = patientName,
             Message = message,
             Timestamp = DateTime.UtcNow,
-            IsFromPatient = true
+            IsFromPatient = true,
+            TenantId = int.Parse(tenantId)
         };
 
         await _chatRepo.AddMessageAsync(msg);
@@ -86,31 +87,33 @@ public class HospitalHub : Hub
             IsFromPatient = true
         };
 
-        // Notify all receptionists
-        await Clients.Group("Receptionist").SendAsync("ReceiveEnquiry", enquiry);
+        // Notify all receptionists in the SAME hospital
+        await Clients.Group($"Tenant_{tenantId}_Receptionist").SendAsync("ReceiveEnquiry", enquiry);
         
         // Echo to patient's OTHER connections only
-        await Clients.OthersInGroup($"user_{patientId}").SendAsync("ReceiveEnquiry", enquiry);
+        await Clients.OthersInGroup($"Tenant_{tenantId}_user_{patientId}").SendAsync("ReceiveEnquiry", enquiry);
     }
 
     [Authorize(Roles = "Receptionist,Admin")]
     public async Task BlockUser(string patientId, string? patientName, string? reason)
     {
+        var tenantId = GetTenantId();
         await _chatRepo.BlockUserAsync(patientId, patientName, reason);
-        await Clients.Group($"user_{patientId}").SendAsync("UserBlocked", reason);
+        await Clients.Group($"Tenant_{tenantId}_user_{patientId}").SendAsync("UserBlocked", reason);
         
-        // Notify other receptionists
-        await Clients.Group("Receptionist").SendAsync("PatientBlockedStatusChanged", new { PatientId = patientId, IsBlocked = true });
+        // Notify other receptionists in the SAME hospital
+        await Clients.Group($"Tenant_{tenantId}_Receptionist").SendAsync("PatientBlockedStatusChanged", new { PatientId = patientId, IsBlocked = true });
     }
 
     [Authorize(Roles = "Receptionist,Admin")]
     public async Task UnblockUser(string patientId)
     {
+        var tenantId = GetTenantId();
         await _chatRepo.UnblockUserAsync(patientId);
-        await Clients.Group($"user_{patientId}").SendAsync("UserUnblocked");
+        await Clients.Group($"Tenant_{tenantId}_user_{patientId}").SendAsync("UserUnblocked");
 
-        // Notify other receptionists
-        await Clients.Group("Receptionist").SendAsync("PatientBlockedStatusChanged", new { PatientId = patientId, IsBlocked = false });
+        // Notify other receptionists in the SAME hospital
+        await Clients.Group($"Tenant_{tenantId}_Receptionist").SendAsync("PatientBlockedStatusChanged", new { PatientId = patientId, IsBlocked = false });
     }
 
     // Receptionist replies to a specific patient
@@ -118,6 +121,7 @@ public class HospitalHub : Hub
     {
         var receptionistName = Context.User?.FindFirst("FullName")?.Value ?? 
                                Context.User?.Identity?.Name ?? "Receptionist";
+        var tenantId = GetTenantId();
 
         var msg = new ChatMessage
         {
@@ -125,7 +129,8 @@ public class HospitalHub : Hub
             ReceptionistName = receptionistName,
             Message = message,
             Timestamp = DateTime.UtcNow,
-            IsFromPatient = false
+            IsFromPatient = false,
+            TenantId = int.Parse(tenantId)
         };
 
         await _chatRepo.AddMessageAsync(msg);
@@ -139,16 +144,17 @@ public class HospitalHub : Hub
             IsFromPatient = false
         };
 
-        // Notify the specific patient
-        await Clients.Group($"user_{patientId}").SendAsync("ReceiveEnquiry", reply);
+        // Notify the specific patient in the SAME hospital
+        await Clients.Group($"Tenant_{tenantId}_user_{patientId}").SendAsync("ReceiveEnquiry", reply);
         
-        // Notify other receptionists
-        await Clients.OthersInGroup("Receptionist").SendAsync("ReceiveEnquiry", reply);
+        // Notify other receptionists in the SAME hospital
+        await Clients.OthersInGroup($"Tenant_{tenantId}_Receptionist").SendAsync("ReceiveEnquiry", reply);
     }
 
     // Example: Allow client to send message to a specific user (if needed)
     public async Task SendMessageToUser(string userId, string message)
     {
-        await Clients.Group($"user_{userId}").SendAsync("ReceiveMessage", Context.User?.Identity?.Name, message);
+        var tenantId = GetTenantId();
+        await Clients.Group($"Tenant_{tenantId}_user_{userId}").SendAsync("ReceiveMessage", Context.User?.Identity?.Name, message);
     }
 }

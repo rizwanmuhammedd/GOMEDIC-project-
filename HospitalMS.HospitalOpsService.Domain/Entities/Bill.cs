@@ -12,6 +12,12 @@ public partial class Bill
 
     public int PatientId { get; set; }
 
+    public string? PatientName { get; set; }
+
+    public string? PatientPhone { get; set; }
+
+    public int PatientAge { get; set; }
+
     public int? AdmissionId { get; set; }
     
     public int? PrescriptionId { get; set; }

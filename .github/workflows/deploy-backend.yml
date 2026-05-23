@@ -1,0 +1,31 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'HospitalMS.**'
+      - 'docker-compose.yml'
+      - '.github/workflows/deploy-backend.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            if [ ! -d "~/HospitalMS" ]; then
+              git clone https://github.com/${{ github.repository }}.git ~/HospitalMS
+            fi
+            cd ~/HospitalMS
+            git pull origin main
+            echo "MSSQL_SA_PASSWORD=${{ secrets.MSSQL_SA_PASSWORD }}" > .env
+            sudo docker-compose up -d --build

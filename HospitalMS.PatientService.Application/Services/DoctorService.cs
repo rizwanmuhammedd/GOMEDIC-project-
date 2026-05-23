@@ -62,6 +62,12 @@ public class DoctorService : IDoctorService
         return doctor == null ? null : MapToDto(doctor);
     }
 
+    public async Task<List<DoctorDto>> GetByUserIdsAsync(IEnumerable<int> userIds)
+    {
+        var doctors = await _repository.GetByUserIdsAsync(userIds);
+        return doctors.Select(MapToDto).ToList();
+    }
+
     public async Task<DoctorDto> GetOrCreateByUserIdAsync(int userId, string fullName)
     {
         var doctor = await _repository.GetByUserIdAsync(userId);

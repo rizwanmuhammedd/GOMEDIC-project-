@@ -228,6 +228,13 @@
       "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5003 } ]
     },
     {
+      "UpstreamPathTemplate": "/api/bills",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/bills",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5003 } ]
+    },
+    {
       "UpstreamPathTemplate": "/api/bills/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "PATCH" ],
       "DownstreamPathTemplate": "/api/bills/{everything}",
@@ -241,14 +248,35 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5003 } ]
     },
+    // ■■ NOTIFICATION SERVICE & SIGNALR (5004) ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
     {
-      "UpstreamPathTemplate": "/api/chat/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PATCH" ],
-      "DownstreamPathTemplate": "/api/chat/{everything}",
+      "UpstreamPathTemplate": "/api/chat/unread-count",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/api/chat/unread-count",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5004 } ]
     },
-    // ■■ NOTIFICATION SERVICE & SIGNALR (5004) ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+    {
+      "UpstreamPathTemplate": "/api/chat/history",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/api/chat/history",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5004 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/chat/read/{patientId}",
+      "UpstreamHttpMethod": [ "PATCH" ],
+      "DownstreamPathTemplate": "/api/chat/read/{patientId}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5004 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/chat/read-hospital/{patientId}",
+      "UpstreamHttpMethod": [ "PATCH" ],
+      "DownstreamPathTemplate": "/api/chat/read-hospital/{patientId}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "localhost", "Port": 5004 } ]
+    },
     {
       "UpstreamPathTemplate": "/api/notifications/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "PATCH" ],

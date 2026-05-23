@@ -46,6 +46,9 @@ public partial class HospitalOpsDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.BillNumber).IsUnique();
+            entity.Property(e => e.PatientName).HasMaxLength(150);
+            entity.Property(e => e.PatientPhone).HasMaxLength(20);
+            entity.Property(e => e.PatientAge).HasDefaultValue(0);
             entity.Property(e => e.BalanceAmount).HasColumnType("decimal(10, 2)");
             entity.Property(e => e.BedCharge).HasColumnType("decimal(10, 2)");
             entity.Property(e => e.BillNumber).HasMaxLength(30);

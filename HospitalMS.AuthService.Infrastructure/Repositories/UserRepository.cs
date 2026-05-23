@@ -22,6 +22,13 @@ public class UserRepository : IUserRepository
         return await _context.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Id == id);
     }
 
+    public async Task<List<User>> GetByIdsAsync(IEnumerable<int> ids)
+    {
+        return await _context.Users.IgnoreQueryFilters()
+            .Where(u => ids.Contains(u.Id))
+            .ToListAsync();
+    }
+
     public async Task<List<User>> GetAllAsync()
     {
         return await _context.Users.IgnoreQueryFilters().ToListAsync();

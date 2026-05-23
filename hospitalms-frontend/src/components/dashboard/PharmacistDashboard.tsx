@@ -14,7 +14,7 @@ export const PharmacistDashboard = () => {
     const [medicines, setMedicines] = useState<any[]>([]);
     const [lowStock, setLowStock] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const { addToast } = useNotifications();
+    const { addToast, hasUnreadInSection } = useNotifications();
 
     const [selectedPrescription, setSelectedPrescription] = useState<any | null>(null);
     const prescIdParam = searchParams.get('prescriptionId');

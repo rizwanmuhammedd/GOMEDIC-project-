@@ -7,7 +7,7 @@ import { useNotifications } from '../../context/NotificationContext';
 export const LabTechDashboard = () => {
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const { addToast } = useNotifications();
+    const { addToast, hasUnreadInSection } = useNotifications();
 
     const loadData = async () => {
         try {
@@ -23,7 +23,11 @@ export const LabTechDashboard = () => {
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
-            <PageHeader title="Laboratory Infrastructure" subtitle="Process samples and securely upload clinical diagnostics" />
+            <PageHeader 
+                title="Laboratory Infrastructure" 
+                subtitle="Process samples and securely upload clinical diagnostics" 
+                hasAlert={hasUnreadInSection('Lab')}
+            />
             <Card title="Pending Sample Queue">
                 {orders.length === 0 ? <EmptyState icon={<FlaskConical strokeWidth={1.5} className="w-8 h-8" />} title="No pending samples" description="All diagnostic requests have been fulfilled." /> : (
                     <div className="space-y-3">

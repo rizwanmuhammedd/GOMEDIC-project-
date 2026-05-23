@@ -1,0 +1,311 @@
+{
+  "Routes": [
+    // ■■ AUTH SERVICE (5001) ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+    {
+      "UpstreamPathTemplate": "/api/auth/users/{id}/restore",
+      "UpstreamHttpMethod": [ "POST" ],
+      "DownstreamPathTemplate": "/api/auth/users/{id}/restore",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "auth-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/auth/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/auth/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "auth-service", "Port": 8080 } ]
+    },
+    // ■■ PATIENT SERVICE (5002) ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+    {
+      "UpstreamPathTemplate": "/api/appointments",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/Appointments",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/appointments/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/Appointments/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/doctors",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/Doctors",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/Doctors",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/Doctors",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/doctors/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/Doctors/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/Doctors/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/Doctors/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/departments",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/Departments",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/Departments",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/Departments",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/departments/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/Departments/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/Departments/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/Departments/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/doctors/schedules/{scheduleId}",
+      "UpstreamHttpMethod": [ "PUT", "DELETE" ],
+      "DownstreamPathTemplate": "/api/Doctors/schedules/{scheduleId}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/doctors/slot-duration",
+      "UpstreamHttpMethod": [ "PATCH" ],
+      "DownstreamPathTemplate": "/api/Doctors/slot-duration",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/Doctors/slot-duration",
+      "UpstreamHttpMethod": [ "PATCH" ],
+      "DownstreamPathTemplate": "/api/Doctors/slot-duration",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/admin/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/admin/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/beds",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/Beds",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/beds/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/Beds/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/Beds",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/Beds",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/Beds/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/Beds/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/public/{everything}",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/api/public/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/admissions",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/admissions",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/admissions/pending",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/api/admissions/pending",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/admissions/{id}/assign-bed/{bedId}",
+      "UpstreamHttpMethod": [ "PATCH" ],
+      "DownstreamPathTemplate": "/api/admissions/{id}/assign-bed/{bedId}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/admissions/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/admissions/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/vitals",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/vitals",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/vitals/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "DownstreamPathTemplate": "/api/vitals/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "patient-service", "Port": 8080 } ]
+    },
+    // ■■ OPS SERVICE (5003) ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+    {
+      "UpstreamPathTemplate": "/api/medicines",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/medicines",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "ops-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/medicines/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PATCH" ],
+      "DownstreamPathTemplate": "/api/medicines/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "ops-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/prescriptions",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/prescriptions",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "ops-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/prescriptions/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PATCH", "PUT" ],
+      "DownstreamPathTemplate": "/api/prescriptions/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "ops-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/bills/{id}/pay-online",
+      "UpstreamHttpMethod": [ "POST" ],
+      "DownstreamPathTemplate": "/api/bills/{id}/pay-online",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "ops-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/bills",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/bills",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "ops-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/bills/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PATCH" ],
+      "DownstreamPathTemplate": "/api/bills/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "ops-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/lab/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PATCH" ],
+      "DownstreamPathTemplate": "/api/lab/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "ops-service", "Port": 8080 } ]
+    },
+    // ■■ NOTIFICATION SERVICE & SIGNALR (5004) ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+    {
+      "UpstreamPathTemplate": "/api/chat/unread-count",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/api/chat/unread-count",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/chat/history",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/api/chat/history",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/chat/read/{patientId}",
+      "UpstreamHttpMethod": [ "PATCH" ],
+      "DownstreamPathTemplate": "/api/chat/read/{patientId}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/chat/read-hospital/{patientId}",
+      "UpstreamHttpMethod": [ "PATCH" ],
+      "DownstreamPathTemplate": "/api/chat/read-hospital/{patientId}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/notifications/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PATCH" ],
+      "DownstreamPathTemplate": "/api/notifications/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
+    },
+    // Map /hubs/notification to /hubs/hospital
+    {
+      "UpstreamPathTemplate": "/hubs/notification/negotiate",
+      "UpstreamHttpMethod": [ "POST" ],
+      "DownstreamPathTemplate": "/hubs/hospital/negotiate",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/hubs/notification",
+      "DownstreamPathTemplate": "/hubs/hospital",
+      "DownstreamScheme": "ws",
+      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/hubs/notification/{everything}",
+      "DownstreamPathTemplate": "/hubs/hospital/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
+    }
+  ],
+  "GlobalConfiguration": {
+    "BaseUrl": "http://api-gateway:8080"
+  }
+}

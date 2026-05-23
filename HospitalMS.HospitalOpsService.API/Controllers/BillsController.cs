@@ -13,6 +13,11 @@ public class BillsController : ControllerBase
     private readonly IBillService _svc;
     public BillsController(IBillService svc) => _svc = svc;
 
+    [HttpGet]
+    [Authorize(Roles = "Admin,Receptionist")]
+    public async Task<IActionResult> GetAll()
+        => Ok(await _svc.GetAllAsync());
+
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {

@@ -88,7 +88,7 @@ const DoctorDashboard: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { addToast } = useNotifications();
+  const { addToast, hasUnreadInSection } = useNotifications();
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -157,13 +157,13 @@ const DoctorDashboard: React.FC = () => {
   };
 
   const handleAddMed = (med: any) => {
-    setPrescriptionItems([...prescriptionItems, {
+    setPrescriptionItems(prev => [...prev, {
       medicineId: med.id,
       name: med.name,
       dosage: '1-0-1',
       frequency: 'After Food',
       durationDays: 5,
-      quantityToDispense: 10, // Default: (1+0+1) * 5 rounded to reasonable number
+      quantityToDispense: 10,
       instructions: ''
     }]);
     setSearchTerm('');
@@ -185,10 +185,17 @@ const DoctorDashboard: React.FC = () => {
   );
 
   const handleSavePrescription = async () => {
-    if (!selectedPatient || prescriptionItems.length === 0) {
-      return addToast({ type: 'warning', title: 'Action Required', message: 'Add at least one medicine.' });
+    // 1. Check patient context (0 is valid for guest)
+    if (selectedPatient === null || selectedPatient === undefined) {
+      return addToast({ type: 'error', title: 'Context Missing', message: 'No patient selected.' });
     }
 
+    // 2. Check medicine list
+    if (prescriptionItems.length === 0) {
+      return addToast({ type: 'warning', title: 'Action Required', message: 'Please add at least one medicine to the prescription.' });
+    }
+
+    // 3. Check notes
     if (!notes.trim()) {
       return addToast({ type: 'warning', title: 'Action Required', message: 'Please add clinical notes/diagnosis.' });
     }
@@ -376,6 +383,7 @@ const DoctorDashboard: React.FC = () => {
                 <PageHeader
                     title={`Welcome, ${(user?.fullName || '').toLowerCase().startsWith('dr.') ? user?.fullName?.split(' ')[1] || '' : `Dr. ${user?.fullName?.split(' ')[0] || ''}`}`}
                     subtitle="Here's what's happening with your practice today."
+                    hasAlert={hasUnreadInSection('Dashboard')}
                 />
                 <div className="flex items-center gap-4">
                     <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
@@ -598,7 +606,11 @@ const DoctorDashboard: React.FC = () => {
     return (
         <div className="space-y-8">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <PageHeader title="Patient Appointments" subtitle="Manage your clinical queue and historical patient visits" />
+                <PageHeader 
+                    title="Patient Appointments" 
+                    subtitle="Manage your clinical queue and historical patient visits" 
+                    hasAlert={hasUnreadInSection('Appointments')}
+                />
                 <div className="w-full md:w-80 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                     <input 
@@ -705,7 +717,11 @@ const DoctorDashboard: React.FC = () => {
     return (
         <div className="space-y-8">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <PageHeader title="Clinical Prescriptions" subtitle="View and manage medication history for your patients" />
+                <PageHeader 
+                    title="Clinical Prescriptions" 
+                    subtitle="View and manage medication history for your patients" 
+                    hasAlert={hasUnreadInSection('Prescriptions')}
+                />
                 <div className="w-full md:w-80 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                     <input 
@@ -782,7 +798,11 @@ const DoctorDashboard: React.FC = () => {
   const renderAdmissions = () => (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
-        <PageHeader title="Patient Admissions" subtitle="Track active inpatient care and bed assignments" />
+        <PageHeader 
+            title="Patient Admissions" 
+            subtitle="Track active inpatient care and bed assignments" 
+            hasAlert={hasUnreadInSection('Admissions')}
+        />
         <Button onClick={() => setAdmitOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/10"><Plus className="w-4 h-4" /> New Admission</Button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

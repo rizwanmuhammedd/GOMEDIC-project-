@@ -12,17 +12,20 @@ public class AppointmentService : IAppointmentService
     private readonly IDoctorRepository _doctorRepo;
     private readonly IDoctorScheduleRepository _scheduleRepo;
     private readonly HttpClient _httpClient;
+    private readonly ITenantProvider _tenant;
 
     public AppointmentService(
         IAppointmentRepository repository, 
         IDoctorRepository doctorRepo,
         IDoctorScheduleRepository scheduleRepo,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        ITenantProvider tenant)
     {
         _repository = repository;
         _doctorRepo = doctorRepo;
         _scheduleRepo = scheduleRepo;
         _httpClient = httpClientFactory.CreateClient();
+        _tenant = tenant;
     }
 
 
@@ -67,43 +70,50 @@ public class AppointmentService : IAppointmentService
 
     private async Task<List<AppointmentResponseDto>> PopulatePatientDetailsAsync(List<AppointmentResponseDto> dtos)
     {
-        var client = _httpClient; 
+        if (!dtos.Any()) return dtos;
+
+        var patientIds = dtos.Select(d => d.PatientId).Distinct().ToList();
+        var userMap = new Dictionary<int, System.Text.Json.JsonElement>();
+
+        try
+        {
+            var idsParam = string.Join(",", patientIds);
+            var res = await _httpClient.GetAsync($"http://localhost:5001/api/auth/users/batch?ids={idsParam}");
+            if (res.IsSuccessStatusCode)
+            {
+                var users = await res.Content.ReadFromJsonAsync<List<System.Text.Json.JsonElement>>();
+                if (users != null)
+                {
+                    userMap = users.ToDictionary(u => u.GetProperty("id").GetInt32(), u => u);
+                }
+            }
+        }
+        catch { }
+
         foreach (var dto in dtos)
         {
-            // Fetch if name is missing OR age is zero (might be uninitialized)
-            if (string.IsNullOrEmpty(dto.PatientName) || dto.PatientName == "Unknown" || dto.PatientAge == 0)
+            if (userMap.TryGetValue(dto.PatientId, out var user))
             {
-                try
+                if (user.TryGetProperty("fullName", out var nameProp))
+                    dto.PatientName = nameProp.GetString() ?? dto.PatientName;
+
+                if (user.TryGetProperty("phone", out var phoneProp))
+                    dto.PatientPhone = phoneProp.GetString() ?? dto.PatientPhone;
+
+                if (user.TryGetProperty("dateOfBirth", out var dobProp) && dobProp.ValueKind != System.Text.Json.JsonValueKind.Null)
                 {
-                    var userRes = await client.GetAsync($"http://localhost:5001/api/auth/users/{dto.PatientId}");
-                    if (userRes.IsSuccessStatusCode)
+                    var dobStr = dobProp.GetString();
+                    if (!string.IsNullOrEmpty(dobStr))
                     {
-                        var user = await userRes.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-                        
-                        if (user.TryGetProperty("fullName", out var nameProp))
-                            dto.PatientName = nameProp.GetString() ?? dto.PatientName;
-
-                        if (user.TryGetProperty("phone", out var phoneProp))
-                            dto.PatientPhone = phoneProp.GetString() ?? dto.PatientPhone;
-
-                        if (user.TryGetProperty("dateOfBirth", out var dobProp) && dobProp.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        if (DateTime.TryParse(dobStr, out var dt))
                         {
-                            var dobStr = dobProp.GetString();
-                            if (!string.IsNullOrEmpty(dobStr))
-                            {
-                                // Resilient parsing: try DateOnly then DateTime
-                                if (DateTime.TryParse(dobStr, out var dt))
-                                {
-                                    var today = DateTime.Today;
-                                    int age = today.Year - dt.Year;
-                                    if (dt.Date > today.AddYears(-age)) age--;
-                                    dto.PatientAge = age >= 0 ? age : 0;
-                                }
-                            }
+                            var today = DateTime.Today;
+                            int age = today.Year - dt.Year;
+                            if (dt.Date > today.AddYears(-age)) age--;
+                            dto.PatientAge = age >= 0 ? age : 0;
                         }
                     }
                 }
-                catch { /* Silent fail to avoid crashing the whole list */ }
             }
         }
         return dtos;
@@ -193,7 +203,8 @@ public class AppointmentService : IAppointmentService
                 UserId = doctor.UserId,
                 Title = "🗓 New Appointment Booked",
                 Message = $"New appointment from {dto.PatientName} for {dto.AppointmentDate} at {dto.AppointmentTime:HH:mm}",
-                Type = "info"
+                Type = "info",
+                TargetUrl = "/doctor/appointments"
             });
         }
         catch (Exception ex)
@@ -209,11 +220,28 @@ public class AppointmentService : IAppointmentService
         var a = await _repository.GetByIdAsync(id)
             ?? throw new Exception("Appointment not found");
 
+        var oldStatus = a.Status;
         a.Status = dto.Status;
         a.ConsultationNotes = dto.ConsultationNotes;
         a.Diagnosis = dto.Diagnosis;
-        // a.UpdatedAt = DateTime.UtcNow; // Assuming UpdatedAt exists in entity
         await _repository.UpdateAsync(a);
+
+        // Notify Patient if status changed
+        if (oldStatus != a.Status && a.PatientId > 0)
+        {
+            try
+            {
+                await _httpClient.PostAsJsonAsync("http://localhost:5004/api/notifications", new
+                {
+                    UserId = a.PatientId,
+                    Title = $"🗓 Appointment Status: {a.Status}",
+                    Message = $"Your appointment with Dr. {a.Doctor?.FullName ?? "Specialist"} is now {a.Status}.",
+                    Type = a.Status == "Cancelled" ? "error" : "success",
+                    TargetUrl = "/appointments"
+                });
+            }
+            catch { }
+        }
     }
 
     public async Task CancelAsync(int id)
@@ -222,8 +250,25 @@ public class AppointmentService : IAppointmentService
             ?? throw new Exception("Appointment not found");
 
         a.Status = "Cancelled";
-        // a.UpdatedAt = DateTime.UtcNow;
         await _repository.UpdateAsync(a);
+
+        // Notify Doctor
+        try
+        {
+            var doctor = await _doctorRepo.GetByIdAsync(a.DoctorId);
+            if (doctor != null)
+            {
+                await _httpClient.PostAsJsonAsync("http://localhost:5004/api/notifications", new
+                {
+                    UserId = doctor.UserId,
+                    Title = "🗓 Appointment Cancelled",
+                    Message = $"Appointment with {a.PatientName} on {a.AppointmentDate} has been cancelled.",
+                    Type = "warning",
+                    TargetUrl = "/doctor/appointments"
+                });
+            }
+        }
+        catch { }
     }
 
     public async Task<List<string>> GetBookedTimesAsync(int doctorId, DateOnly date)

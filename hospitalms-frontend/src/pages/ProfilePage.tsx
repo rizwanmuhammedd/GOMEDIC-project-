@@ -91,8 +91,14 @@ const ProfilePage: React.FC = () => {
         const newUrl = res.data.imageUrl;
         
         if (user && newUrl) {
-            // Sync with PatientService so it shows on homepage
-            await doctorApi.updateProfilePicture(newUrl);
+            // Sync with PatientService only if user is a Doctor
+            if (user.role === 'Doctor') {
+                try {
+                    await doctorApi.updateProfilePicture(newUrl);
+                } catch (syncErr) {
+                    console.warn("PatientService sync skipped or failed", syncErr);
+                }
+            }
 
             const updatedUser = { ...user, profileImageUrl: newUrl };
             localStorage.setItem('hms_user', JSON.stringify(updatedUser));
@@ -292,9 +298,9 @@ const ProfilePage: React.FC = () => {
               <div className="space-y-6">
                 <div>
                   <Input
-                    label="Active Password"
+                    label="Old Password"
                     type="password"
-                    placeholder="Verify existing cryptographic identity"
+                    placeholder="Enter current password"
                     value={passForm.currentPassword}
                     onChange={(e: any) => setPassForm({ ...passForm, currentPassword: e.target.value })}
                     required
@@ -306,18 +312,18 @@ const ProfilePage: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Input
-                    label="Target Password"
+                    label="New Password"
                     type="password"
-                    placeholder="Define new security vector"
+                    placeholder="Enter new password"
                     value={passForm.newPassword}
                     onChange={(e: any) => setPassForm({ ...passForm, newPassword: e.target.value })}
                     required
                     autoComplete="new-password"
                   />
                   <Input
-                    label="Re-Verify Target"
+                    label="Confirm Password"
                     type="password"
-                    placeholder="Authenticate exact string"
+                    placeholder="Confirm new password"
                     value={passForm.confirmPassword}
                     onChange={(e: any) => setPassForm({ ...passForm, confirmPassword: e.target.value })}
                     required
@@ -332,7 +338,7 @@ const ProfilePage: React.FC = () => {
                   loading={loading}
                   className="w-full md:w-auto h-11 px-8"
                 >
-                  Confirm Re-encryption
+                  Update Password
                 </Button>
               </div>
             </form>

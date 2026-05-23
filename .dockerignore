@@ -1,0 +1,11 @@
+**/.dockerignore
+**/.git
+**/.github
+**/.vs
+**/bin
+**/obj
+**/out
+**/*.ps1
+**/*.sql
+**/node_modules
+**/.env

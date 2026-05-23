@@ -72,11 +72,35 @@ public class ChatRepository : IChatRepository
 
         if (unread.Any())
         {
-            foreach (var msg in unread)
-            {
-                msg.IsRead = true;
-            }
+            foreach (var msg in unread) msg.IsRead = true;
             await _db.SaveChangesAsync();
+        }
+    }
+
+    public async Task MarkHospitalMessagesAsReadAsync(string patientId)
+    {
+        var unread = await _db.ChatMessages
+            .Where(m => m.PatientId == patientId && !m.IsFromPatient && !m.IsRead)
+            .ToListAsync();
+
+        if (unread.Any())
+        {
+            foreach (var msg in unread) msg.IsRead = true;
+            await _db.SaveChangesAsync();
+        }
+    }
+
+    public async Task<int> GetTotalUnreadCountAsync(string? patientId = null)
+    {
+        if (string.IsNullOrEmpty(patientId))
+        {
+            // For Receptionist: Total unread from all patients
+            return await _db.ChatMessages.CountAsync(m => m.IsFromPatient && !m.IsRead);
+        }
+        else
+        {
+            // For Patient: Total unread from hospital for this patient
+            return await _db.ChatMessages.CountAsync(m => m.PatientId == patientId && !m.IsFromPatient && !m.IsRead);
         }
     }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Calendar, FlaskConical, Pill, Receipt,
   BedDouble, Users, Bell, BellOff, LogOut, Menu, X, ChevronRight,
   Activity, Settings, Stethoscope, Home, CalendarDays,
-  AlertTriangle, Info, Plus, Sparkles
+  AlertTriangle, Info, Plus, Sparkles, MessageSquare
 } from 'lucide-react';
 import type { Role } from '../../context/AuthContext';
 
@@ -54,12 +54,18 @@ const NAV_ITEMS: Record<Role, { icon: React.ReactNode; label: string; path: stri
   ],
 };
 
-const Sidebar: React.FC<{ open: boolean; onClose: () => void; logout: () => void; onOpenAI: () => void }> = ({ open, onClose, logout, onOpenAI }) => {
-  const { user } = useAuth();
+const Sidebar: React.FC<{ 
+    open: boolean; 
+    onClose: () => void; 
+    logout: () => void; 
+    onOpenAI: () => void;
+    navItems: any[];
+}> = ({ open, onClose, logout, onOpenAI, navItems }) => {
+  const { user, tenant } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { hasUnreadInSection, markSectionAsRead } = useNotifications();
-  const navItems = user ? NAV_ITEMS[user.role] : [];
+  const hospitalName = tenant?.name || 'GOMEDIC';
 
   const handleLogout = () => {
     logout();
@@ -75,7 +81,7 @@ const Sidebar: React.FC<{ open: boolean; onClose: () => void; logout: () => void
             <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center shadow-lg shadow-zinc-200">
               <Activity strokeWidth={2.5} className="w-4 h-4 text-white" />
             </div>
-            <p className="text-[#18181B] font-black text-[16px] tracking-tight">GOMEDIC</p>
+            <p className="text-[#18181B] font-black text-[16px] tracking-tight uppercase truncate max-w-[140px]">{hospitalName}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-zinc-100 text-zinc-400 hover:text-zinc-900 transition-all"><X strokeWidth={2} className="w-5 h-5" /></button>
         </div>
@@ -154,16 +160,30 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [aiChatOpen, setAIChatOpen] = useState(false);
-  const { user, logout } = useAuth();
-  const { notifications, unreadCount, markAsRead, markAllAsRead, notificationsEnabled, setNotificationsEnabled } = useNotifications();
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
+  const [enquiryUnreadCount, setEnquiryUnreadCount] = useState(0);
+  const { user, logout, tenant } = useAuth();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, markSectionAsRead, notificationsEnabled, setNotificationsEnabled } = useNotifications();
   const navigate = useNavigate();
+  const location = useLocation();
+  const hospitalName = tenant?.name || 'GOMEDIC';
+
+  const navItems = user ? NAV_ITEMS[user.role] : [];
+
+  // Auto-mark current section as read on path change
+  useEffect(() => {
+    const currentItem = navItems.find(item => location.pathname.startsWith(item.path));
+    if (currentItem) {
+        markSectionAsRead(currentItem.label);
+    }
+  }, [location.pathname, navItems, markSectionAsRead]);
 
   return (
     <div className="flex h-[100dvh] bg-[#FAFAFA] font-sans text-zinc-900 overflow-hidden selection:bg-zinc-200">
       {/* Sidebar Overlay */}
       {sidebarOpen && <div className="fixed inset-0 bg-zinc-950/20 backdrop-blur-[2px] z-40 transition-opacity animate-in fade-in duration-300" onClick={() => setSidebarOpen(false)} />}
       
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} logout={logout} onOpenAI={() => setAIChatOpen(true)} />
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} logout={logout} onOpenAI={() => setAIChatOpen(true)} navItems={navItems} />
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 flex items-center justify-between px-6 bg-white/80 backdrop-blur-md border-b border-zinc-100 shrink-0 z-30">
@@ -173,10 +193,26 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               {unreadCount > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full shadow-sm animate-pulse" />}
             </button>
             <div className="hidden sm:block">
-              <h1 className="text-[14px] font-black text-zinc-900 uppercase tracking-widest">Hospital Management</h1>
+              <h1 className="text-[14px] font-black text-zinc-900 uppercase tracking-widest">{hospitalName}</h1>
             </div>
           </div>
           <div className="flex items-center gap-4">
+            {/* ENQUIRY CHAT TRIGGER */}
+            {(user?.role === 'Receptionist' || user?.role === 'Patient') && (
+              <button 
+                onClick={() => setEnquiryOpen(!enquiryOpen)}
+                className={`relative w-10 h-10 flex items-center justify-center rounded-xl transition-all ${enquiryOpen ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200 shadow-sm' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}`}
+                title="Enquiry Chat"
+              >
+                <MessageSquare strokeWidth={1.5} className="w-5 h-5" />
+                {enquiryUnreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white shadow-sm animate-bounce">
+                    {enquiryUnreadCount > 9 ? '9+' : enquiryUnreadCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             <div className="relative">
               <button onClick={() => setNotifOpen(!notifOpen)} className={`relative w-8 h-8 flex items-center justify-center rounded-md transition-all ${notifOpen ? 'bg-zinc-200 text-zinc-900' : 'text-zinc-500'}`}>
                 {notificationsEnabled ? <Bell strokeWidth={1.5} className="w-[18px] h-[18px]" /> : <BellOff strokeWidth={1.5} className="w-[18px] h-[18px] text-zinc-400" />}
@@ -232,7 +268,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </main>
       </div>
 
-      {user?.role === 'Patient' && <EnquiryChat />}
+      {(user?.role === 'Patient' || user?.role === 'Receptionist') && (
+        <EnquiryChat isOpen={enquiryOpen} onClose={() => setEnquiryOpen(false)} onUnreadChange={setEnquiryUnreadCount} />
+      )}
       <AIChat isOpen={aiChatOpen} onClose={() => setAIChatOpen(false)} />
     </div>
   );

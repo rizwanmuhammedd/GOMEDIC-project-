@@ -15,21 +15,40 @@ namespace HospitalMS.AuthService.Application.Services;
 public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepo;
+    private readonly ITenantRepository _tenantRepo;
     private readonly IConfiguration _config;
     private readonly IEmailService _emailService;
 
-    public AuthService(IUserRepository userRepo, IConfiguration config, IEmailService emailService)
+    public AuthService(IUserRepository userRepo, ITenantRepository tenantRepo, IConfiguration config, IEmailService emailService)
     {
         _userRepo = userRepo;
+        _tenantRepo = tenantRepo;
         _config = config;
         _emailService = emailService;
     }
 
-    public async Task<string> RegisterAsync(RegisterRequestDto dto)
+    public async Task<Tenant?> GetTenantByIdAsync(int tenantId)
+    {
+        return await _tenantRepo.GetByIdAsync(tenantId);
+    }
+
+    public async Task<Tenant?> GetTenantBySubdomainAsync(string subdomain)
+    {
+        return await _tenantRepo.GetBySubdomainAsync(subdomain);
+    }
+
+    public async Task<string> RegisterAsync(RegisterRequestDto dto, string? subdomain = null)
     {
         var existing = await _userRepo.GetByEmailAsync(dto.Email);
         if (existing != null)
             return "User already exists";
+
+        int tenantId = 1; // Default
+        if (!string.IsNullOrEmpty(subdomain))
+        {
+            var tenant = await _tenantRepo.GetBySubdomainAsync(subdomain);
+            if (tenant != null) tenantId = tenant.Id;
+        }
 
         var user = new User
         {
@@ -41,14 +60,14 @@ public class AuthService : IAuthService
             DateOfBirth = dto.DateOfBirth,
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
-            TenantId = 1 // Ensure tenant is set
+            TenantId = tenantId
         };
 
         await _userRepo.AddUserAsync(user);
         return "Registered successfully";
     }
 
-    public async Task<User> CreateStaffAsync(RegisterRequestDto dto)
+    public async Task<User> CreateStaffAsync(RegisterRequestDto dto, int tenantId)
     {
         var existing = await _userRepo.GetByEmailAsync(dto.Email);
         if (existing != null)
@@ -64,7 +83,7 @@ public class AuthService : IAuthService
             DateOfBirth = dto.DateOfBirth,
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
-            TenantId = 1
+            TenantId = tenantId
         };
 
         await _userRepo.AddUserAsync(user);
@@ -243,7 +262,7 @@ public class AuthService : IAuthService
         }
     }
 
-    public async Task<AuthResponseDto> LoginWithGoogleAsync(GoogleLoginRequestDto dto)
+    public async Task<AuthResponseDto> LoginWithGoogleAsync(GoogleLoginRequestDto dto, string? subdomain = null)
     {
         var settings = new GoogleJsonWebSignature.ValidationSettings()
         {
@@ -255,6 +274,13 @@ public class AuthService : IAuthService
         var user = await _userRepo.GetByEmailAsync(payload.Email);
         if (user == null)
         {
+            int tenantId = 1; // Default
+            if (!string.IsNullOrEmpty(subdomain))
+            {
+                var tenant = await _tenantRepo.GetBySubdomainAsync(subdomain);
+                if (tenant != null) tenantId = tenant.Id;
+            }
+
             // Auto-register if user doesn't exist
             user = new User
             {
@@ -265,7 +291,7 @@ public class AuthService : IAuthService
                 Phone = "0000000000",
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow,
-                TenantId = 1 // Default tenant
+                TenantId = tenantId
             };
             await _userRepo.AddUserAsync(user);
         }
@@ -278,6 +304,11 @@ public class AuthService : IAuthService
     public async Task<User?> GetUserByIdAsync(int userId)
     {
         return await _userRepo.GetByIdAsync(userId);
+    }
+
+    public async Task<List<User>> GetUsersByIdsAsync(IEnumerable<int> userIds)
+    {
+        return await _userRepo.GetByIdsAsync(userIds);
     }
 
     private AuthResponseDto BuildResponse(User user)

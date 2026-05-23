@@ -6,8 +6,8 @@ namespace HospitalMS.AuthService.Application.Interfaces;
 public interface IAuthService
 {
     Task<AuthResponseDto> LoginAsync(LoginRequestDto request);
-    Task<string> RegisterAsync(RegisterRequestDto request);
-    Task<User> CreateStaffAsync(RegisterRequestDto request);
+    Task<string> RegisterAsync(RegisterRequestDto request, string? subdomain = null);
+    Task<User> CreateStaffAsync(RegisterRequestDto request, int tenantId);
     Task<List<User>> GetAllUsersAsync();
     Task<List<User>> GetUsersByRoleAsync(string role);
     Task<AuthResponseDto> RefreshAsync(RefreshTokenDto dto);
@@ -20,5 +20,8 @@ public interface IAuthService
     Task DeactivateUserAsync(int userId);
     Task RestoreUserAsync(int userId);
     Task<User?> GetUserByIdAsync(int userId);
-    Task<AuthResponseDto> LoginWithGoogleAsync(GoogleLoginRequestDto dto);
+    Task<List<User>> GetUsersByIdsAsync(IEnumerable<int> userIds);
+    Task<Tenant?> GetTenantByIdAsync(int tenantId);
+    Task<Tenant?> GetTenantBySubdomainAsync(string subdomain);
+    Task<AuthResponseDto> LoginWithGoogleAsync(GoogleLoginRequestDto dto, string? subdomain = null);
 }

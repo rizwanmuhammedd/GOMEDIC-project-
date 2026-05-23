@@ -134,6 +134,7 @@ export interface AuthUser {
 
 interface AuthContextType {
   user: AuthUser | null;
+  tenant: any;
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -160,6 +161,31 @@ const USER_KEY = 'hms_user';
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setLoading] = useState(true);
+  const [tenant, setTenant] = useState<any>(null);
+
+  // Resolve Tenant on load
+  useEffect(() => {
+    const resolveTenant = async () => {
+      const hostname = window.location.hostname;
+      const parts = hostname.split('.');
+      if (parts.length > 2 || (parts.length === 2 && hostname.includes('localhost'))) {
+        const subdomain = parts[0];
+        if (subdomain !== 'www') {
+          try {
+            const res = await authApi.resolveTenant(subdomain);
+            setTenant(res.data);
+            localStorage.setItem('hms_tenant_id', res.data.id.toString());
+          } catch (err) {
+            console.error('Tenant resolution failed', err);
+            localStorage.removeItem('hms_tenant_id');
+          }
+        }
+      } else {
+        localStorage.removeItem('hms_tenant_id');
+      }
+    };
+    resolveTenant();
+  }, []);
 
   useEffect(() => {
     const storedToken = localStorage.getItem(TOKEN_KEY);
@@ -228,6 +254,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{ 
       user, 
+      tenant,
       token: user?.token ?? null, 
       isLoading, 
       login, 

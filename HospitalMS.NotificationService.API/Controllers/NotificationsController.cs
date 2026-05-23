@@ -9,6 +9,7 @@ namespace HospitalMS.NotificationService.API.Controllers;
 
 public class BroadcastRequest
 {
+    public int TenantId { get; set; } = 1;
     public string? GroupName { get; set; }
     public string EventName { get; set; } = "ReceiveNotification";
     public object Payload { get; set; } = new { };
@@ -87,6 +88,7 @@ public class NotificationsController : ControllerBase
 
     public class RoleNotificationRequest
     {
+        public int TenantId { get; set; } = 1;
         public string Role { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
@@ -98,21 +100,43 @@ public class NotificationsController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> SendToRole([FromBody] RoleNotificationRequest request)
     {
+        // Join with Tenant scope
+        string group = $"Tenant_{request.TenantId}_{request.Role}";
+        await _hub.Clients.Group(group).SendAsync("ReceiveNotification", new {
+            title = request.Title,
+            message = request.Message,
+            type = request.Type,
+            targetUrl = request.TargetUrl
+        });
+
+        // Also save to database (service handles filtering by TenantId via DbContext)
         await _svc.SendToRoleAsync(request.Role, request.Title, request.Message, request.Type, targetUrl: request.TargetUrl);
-        return Ok(new { message = $"Notifications sent to all {request.Role}s" });
+        
+        return Ok(new { message = $"Notifications sent to all {request.Role}s in Tenant {request.TenantId}" });
     }
 
     [HttpPost("broadcast")]
-    [AllowAnonymous] // Usually internal, but allowing for dev ease. Secure in production.
+    [AllowAnonymous] // Usually internal
     public async Task<IActionResult> Broadcast([FromBody] BroadcastRequest request)
     {
         if (string.IsNullOrEmpty(request.GroupName))
         {
-            await _hub.Clients.All.SendAsync(request.EventName, request.Payload);
+            // Broadcast to everyone in the SAME hospital
+            await _hub.Clients.Group($"Tenant_{request.TenantId}_Admin").SendAsync(request.EventName, request.Payload);
+            await _hub.Clients.Group($"Tenant_{request.TenantId}_Doctor").SendAsync(request.EventName, request.Payload);
+            await _hub.Clients.Group($"Tenant_{request.TenantId}_Receptionist").SendAsync(request.EventName, request.Payload);
+            await _hub.Clients.Group($"Tenant_{request.TenantId}_Patient").SendAsync(request.EventName, request.Payload);
+            await _hub.Clients.Group($"Tenant_{request.TenantId}_Pharmacist").SendAsync(request.EventName, request.Payload);
+            await _hub.Clients.Group($"Tenant_{request.TenantId}_LabTechnician").SendAsync(request.EventName, request.Payload);
         }
         else
         {
-            await _hub.Clients.Group(request.GroupName).SendAsync(request.EventName, request.Payload);
+            // Broadcast to a specific role in the SAME hospital
+            string targetGroup = request.GroupName.StartsWith("Tenant_") 
+                ? request.GroupName 
+                : $"Tenant_{request.TenantId}_{request.GroupName}";
+                
+            await _hub.Clients.Group(targetGroup).SendAsync(request.EventName, request.Payload);
         }
         return Ok(new { message = "Broadcast sent successfully" });
     }

@@ -33,7 +33,7 @@ export const PatientDashboard = () => {
     const [selectedDept, setSelectedDept] = useState<number | null>(null);
     const [selectedPrescription, setSelectedPrescription] = useState<any | null>(null);
     const recordsRef = React.useRef<HTMLDivElement>(null);
-    const { addToast } = useNotifications();
+    const { addToast, hasUnreadInSection } = useNotifications();
 
     // Booking States
     const [bookingModalOpen, setBookingModalOpen] = useState(false);
@@ -528,7 +528,11 @@ export const PatientDashboard = () => {
             {/* Main Content */}
             {location.pathname === '/appointments' ? (
                 <div className="space-y-8">
-                    <PageHeader title="My Appointments" subtitle="Manage your upcoming visits and medical history" />
+                    <PageHeader 
+                        title="My Appointments" 
+                        subtitle="Manage your upcoming visits and medical history" 
+                        hasAlert={hasUnreadInSection('Appointments')}
+                    />
                     <Card title="Upcoming & Recent Visits">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                             {appointments.length === 0 ? <div className="col-span-full"><EmptyState icon={<Calendar strokeWidth={1.5} className="w-8 h-8" />} title="No appointments found" /></div> :
@@ -554,7 +558,11 @@ export const PatientDashboard = () => {
                 </div>
             ) : location.pathname === '/bills' ? (
                 <div className="space-y-8">
-                    <PageHeader title="Bills & Payments" subtitle="Track your medical expenses and payment status" />
+                    <PageHeader 
+                        title="Bills & Payments" 
+                        subtitle="Track your medical expenses and payment status" 
+                        hasAlert={hasUnreadInSection('Bills')}
+                    />
                     
                     {/* Section: Pending Consultation Payments */}
                     <Card title="Direct Online Settlements">
@@ -649,7 +657,11 @@ export const PatientDashboard = () => {
                 </div>
             ) : location.pathname === '/prescriptions' ? (
                 <div className="space-y-8">
-                    <PageHeader title="My Prescriptions" subtitle="Access your medical history and medicine details" />
+                    <PageHeader 
+                        title="My Prescriptions" 
+                        subtitle="Access your medical history and medicine details" 
+                        hasAlert={hasUnreadInSection('Prescriptions')}
+                    />
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                         {prescriptions.length === 0 ? <div className="lg:col-span-3"><EmptyState icon={<Pill strokeWidth={1.5} className="w-8 h-8" />} title="No prescriptions found" /></div> :
                             prescriptions.map(p => (
@@ -683,7 +695,11 @@ export const PatientDashboard = () => {
                 </div>
             ) : (
                 <div className="space-y-10">
-                    <PageHeader title="Patient Dashboard" subtitle="Manage your health and connect with specialists" />
+                    <PageHeader 
+                        title="Patient Dashboard" 
+                        subtitle="Manage your health and connect with specialists" 
+                        hasAlert={hasUnreadInSection('Dashboard')}
+                    />
                     
                     {/* AI ASSISTANT PROMO */}
                     <div className="relative overflow-hidden bg-gradient-to-r from-emerald-600 to-teal-700 rounded-[32px] p-8 text-white shadow-xl group">
@@ -882,7 +898,7 @@ export const PatientDashboard = () => {
                                                         </button>
                                                     );
                                                 })}
-                                                {availableSlots.length === 0 && <div className="col-span-4 p-4 text-center bg-zinc-50 rounded-xl border border-dashed border-zinc-200 text-zinc-400 text-[12px] italic">No slots available for this date.</div>}
+                                                {availableSlots.length === 0 && <div className="col-span-4 p-4 text-center bg-zinc-50 rounded-xl border border-dashed border-zinc-200 text-red-500 font-bold text-[12px] italic">Today no schedules for this doctor on selected date.</div>}
                                             </div>
                                         )}
                                     </div>

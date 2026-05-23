@@ -17,18 +17,21 @@ public class PrescriptionService : IPrescriptionService
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _config;
     private readonly IBillService _billService;
+    private readonly ITenantProvider _tenant;
 
     public PrescriptionService(IPrescriptionRepository repo,
                                 IMedicineRepository medRepo,
                                 IHttpClientFactory httpClientFactory,
                                 IConfiguration config,
-                                IBillService billService)
+                                IBillService billService,
+                                ITenantProvider tenant)
     { 
         _repo = repo; 
         _medRepo = medRepo; 
         _httpClient = httpClientFactory.CreateClient();
         _config = config;
         _billService = billService;
+        _tenant = tenant;
     }
 
     // Doctor creates prescription
@@ -93,6 +96,8 @@ public class PrescriptionService : IPrescriptionService
         var bill = await _billService.GenerateBillAsync(new GenerateBillDto
         {
             PatientId = saved.PatientId,
+            PatientName = saved.PatientName,
+            PatientPhone = saved.PatientPhone,
             PrescriptionId = saved.Id,
             ConsultationCharge = mapped.ConsultationFee,
             GeneratedByUserId = doctorId // Assigned doctor ID
@@ -122,7 +127,8 @@ public class PrescriptionService : IPrescriptionService
                 Message = $"Doctor has issued a new prescription for you. Please visit the pharmacy.",
                 Type = "success",
                 RelatedEntityId = saved.Id,
-                RelatedEntityType = "Prescription"
+                RelatedEntityType = "Prescription",
+                TargetUrl = "/prescriptions"
             });
         }
         catch (Exception ex)
@@ -135,6 +141,7 @@ public class PrescriptionService : IPrescriptionService
         {
             await _httpClient.PostAsJsonAsync("http://localhost:5004/api/notifications/role", new
             {
+                TenantId = _tenant.TenantId,
                 Role = "Pharmacist",
                 Title = "🔔 New Prescription Request",
                 Message = $"A new prescription (ID: {saved.Id}) is pending for dispensing.",
@@ -216,6 +223,7 @@ public class PrescriptionService : IPrescriptionService
                     {
                         await _httpClient.PostAsJsonAsync("http://localhost:5004/api/notifications/role", new
                         {
+                            TenantId = _tenant.TenantId,
                             Role = "Pharmacist",
                             Title = "⚠ Low Stock Alert",
                             Message = $"Medicine '{med.Name}' is low on stock ({newStock} units left).",
@@ -263,35 +271,87 @@ public class PrescriptionService : IPrescriptionService
     public async Task<List<PrescriptionResponseDto>> GetPendingAsync()
     {
         var list = await _repo.GetPendingAsync();
-        var result = new List<PrescriptionResponseDto>();
-        foreach (var p in list) result.Add(await MapAsync(p));
-        return result;
+        return await MapBatchAsync(list);
     }
 
     public async Task<List<PrescriptionResponseDto>> GetByPatientAsync(int patientId)
     {
         var list = await _repo.GetByPatientAsync(patientId);
-        var result = new List<PrescriptionResponseDto>();
-        foreach (var p in list) result.Add(await MapAsync(p));
-        return result;
+        return await MapBatchAsync(list);
     }
 
     public async Task<List<PrescriptionResponseDto>> GetByDoctorAsync(int doctorId)
     {
         var list = await _repo.GetByDoctorAsync(doctorId);
-        var result = new List<PrescriptionResponseDto>();
-        foreach (var p in list) result.Add(await MapAsync(p));
-        return result;
+        return await MapBatchAsync(list);
+    }
+
+    private async Task<List<PrescriptionResponseDto>> MapBatchAsync(List<Prescription> prescriptions)
+    {
+        if (!prescriptions.Any()) return new List<PrescriptionResponseDto>();
+
+        var doctorIds = prescriptions.Select(p => p.DoctorId).Distinct().ToList();
+        var doctorMap = new Dictionary<int, (string Name, decimal Fee)>();
+
+        try
+        {
+            var idsParam = string.Join(",", doctorIds);
+            var response = await _httpClient.GetAsync($"http://localhost:5000/api/doctors/user/batch?userIds={idsParam}");
+            if (response.IsSuccessStatusCode)
+            {
+                var docs = await response.Content.ReadFromJsonAsync<List<System.Text.Json.JsonElement>>();
+                foreach (var doc in docs)
+                {
+                    int userId = doc.GetProperty("userId").GetInt32();
+                    string name = doc.TryGetProperty("fullName", out var n) ? n.GetString() ?? "Medical Specialist" : "Medical Specialist";
+                    decimal fee = doc.TryGetProperty("consultationFee", out var f) ? f.GetDecimal() : 500;
+                    doctorMap[userId] = (name, fee);
+                }
+            }
+        }
+        catch { /* Fallback */ }
+
+        var results = new List<PrescriptionResponseDto>();
+        foreach (var p in prescriptions)
+        {
+            var dto = await MapAsync(p); // This still calls MapAsync which does a single fetch if map is missing
+            if (doctorMap.TryGetValue(p.DoctorId, out var docInfo))
+            {
+                dto.DoctorName = docInfo.Name;
+                dto.ConsultationFee = docInfo.Fee;
+            }
+            results.Add(dto);
+        }
+        return results;
     }
 
     public async Task<RazorpayOrderResponseDto> CreateRazorpayOrderAsync(int prescriptionId, bool isMedicine = false)
     {
         var dto = await MapAsync(await _repo.GetByIdWithItemsAsync(prescriptionId) ?? throw new Exception("Prescription not found"));
         
+        // Fetch Tenant-specific Razorpay Settings from AuthService
         var key = _config["Razorpay:Key"];
         var secret = _config["Razorpay:Secret"];
+
+        try
+        {
+            var res = await _httpClient.GetAsync($"http://localhost:5001/api/auth/tenants/{_tenant.TenantId}/settings");
+            if (res.IsSuccessStatusCode)
+            {
+                var settings = await res.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                var tKey = settings.TryGetProperty("razorpayKey", out var pk) ? pk.GetString() : null;
+                var tSecret = settings.TryGetProperty("razorpaySecret", out var ps) ? ps.GetString() : null;
+                
+                if (!string.IsNullOrEmpty(tKey) && !string.IsNullOrEmpty(tSecret))
+                {
+                    key = tKey;
+                    secret = tSecret;
+                }
+            }
+        }
+        catch { /* Fallback to global config if auth service is down */ }
         
-        RazorpayClient client = new RazorpayClient(key, secret);
+        RazorpayClient rzpClient = new RazorpayClient(key, secret);
 
         decimal amountToPay = isMedicine ? dto.TotalCost : dto.ConsultationFee;
         if (amountToPay <= 0) throw new Exception("Amount must be greater than zero");
@@ -301,7 +361,7 @@ public class PrescriptionService : IPrescriptionService
         options.Add("currency", "INR");
         options.Add("receipt", $"{(isMedicine ? "MED" : "CON")}_{prescriptionId}");
 
-        Order order = client.Order.Create(options);
+        Order order = rzpClient.Order.Create(options);
 
         return new RazorpayOrderResponseDto
         {
@@ -318,6 +378,18 @@ public class PrescriptionService : IPrescriptionService
         try
         {
             var secret = _config["Razorpay:Secret"];
+
+            try
+            {
+                var res = await _httpClient.GetAsync($"http://localhost:5001/api/auth/tenants/{_tenant.TenantId}/settings");
+                if (res.IsSuccessStatusCode)
+                {
+                    var settings = await res.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                    var tSecret = settings.TryGetProperty("razorpaySecret", out var ps) ? ps.GetString() : null;
+                    if (!string.IsNullOrEmpty(tSecret)) secret = tSecret;
+                }
+            }
+            catch { }
             
             Dictionary<string, string> attributes = new Dictionary<string, string>();
             attributes.Add("razorpay_order_id", verificationDto.RazorpayOrderId);

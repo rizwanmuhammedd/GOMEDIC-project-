@@ -237,7 +237,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return false;
     });
 
-    if (toMark.length > 0) {
+    if (toMark.length > 0 && s !== 'dashboard') {
         try {
             await Promise.all(toMark.map(n => notificationApi.markAsRead(n.id)));
             await fetchNotifications();

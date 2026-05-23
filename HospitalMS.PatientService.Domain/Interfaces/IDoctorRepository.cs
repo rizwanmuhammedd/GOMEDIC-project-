@@ -10,6 +10,7 @@ public interface IDoctorRepository
     Task<Doctor?> GetByIdAsync(int id);
     Task<List<Doctor>> GetByDepartmentAsync(int deptId);
     Task<Doctor?> GetByUserIdAsync(int userId);
+    Task<List<Doctor>> GetByUserIdsAsync(IEnumerable<int> userIds);
     Task<Doctor> AddAsync(Doctor doctor);
     Task UpdateAsync(Doctor doctor);
 }

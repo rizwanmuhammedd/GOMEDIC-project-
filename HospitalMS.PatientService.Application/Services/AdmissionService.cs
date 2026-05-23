@@ -176,44 +176,53 @@ public class AdmissionService : IAdmissionService
 
     private async Task<List<AdmissionResponseDto>> PopulateDtosAsync(List<Admission> admissions)
     {
-        var client = _httpClientFactory.CreateClient();
-        var dtos = new List<AdmissionResponseDto>();
+        if (!admissions.Any()) return new List<AdmissionResponseDto>();
 
+        var patientIds = admissions.Select(a => a.PatientId).Distinct().ToList();
+        var userMap = new Dictionary<int, System.Text.Json.JsonElement>();
+
+        try
+        {
+            var client = _httpClientFactory.CreateClient();
+            var idsParam = string.Join(",", patientIds);
+            var res = await client.GetAsync($"http://localhost:5001/api/auth/users/batch?ids={idsParam}");
+            if (res.IsSuccessStatusCode)
+            {
+                var users = await res.Content.ReadFromJsonAsync<List<System.Text.Json.JsonElement>>();
+                if (users != null)
+                {
+                    userMap = users.ToDictionary(u => u.GetProperty("id").GetInt32(), u => u);
+                }
+            }
+        }
+        catch { }
+
+        var dtos = new List<AdmissionResponseDto>();
         foreach (var a in admissions)
         {
             var dto = MapToDto(a, a.Bed);
-            if (string.IsNullOrEmpty(dto.PatientName) || dto.PatientName == "Unknown Patient" || dto.PatientAge == 0)
+            if (userMap.TryGetValue(a.PatientId, out var user))
             {
-                try
+                if (user.TryGetProperty("fullName", out var nameProp))
+                    dto.PatientName = nameProp.GetString() ?? dto.PatientName;
+
+                if (user.TryGetProperty("phone", out var phoneProp))
+                    dto.PatientPhone = phoneProp.GetString() ?? dto.PatientPhone;
+
+                if (user.TryGetProperty("dateOfBirth", out var dobProp) && dobProp.ValueKind != System.Text.Json.JsonValueKind.Null)
                 {
-                    var userRes = await client.GetAsync($"http://localhost:5001/api/auth/users/{a.PatientId}");
-                    if (userRes.IsSuccessStatusCode)
+                    var dobStr = dobProp.GetString();
+                    if (!string.IsNullOrEmpty(dobStr))
                     {
-                        var user = await userRes.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-                        
-                        if (user.TryGetProperty("fullName", out var nameProp))
-                            dto.PatientName = nameProp.GetString() ?? dto.PatientName;
-
-                        if (user.TryGetProperty("phone", out var phoneProp))
-                            dto.PatientPhone = phoneProp.GetString() ?? dto.PatientPhone;
-
-                        if (user.TryGetProperty("dateOfBirth", out var dobProp) && dobProp.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        if (DateTime.TryParse(dobStr, out var dt))
                         {
-                            var dobStr = dobProp.GetString();
-                            if (!string.IsNullOrEmpty(dobStr))
-                            {
-                                if (DateTime.TryParse(dobStr, out var dt))
-                                {
-                                    var today = DateTime.Today;
-                                    int age = today.Year - dt.Year;
-                                    if (dt.Date > today.AddYears(-age)) age--;
-                                    dto.PatientAge = age >= 0 ? age : 0;
-                                }
-                            }
+                            var today = DateTime.Today;
+                            int age = today.Year - dt.Year;
+                            if (dt.Date > today.AddYears(-age)) age--;
+                            dto.PatientAge = age >= 0 ? age : 0;
                         }
                     }
                 }
-                catch { }
             }
             dtos.Add(dto);
         }

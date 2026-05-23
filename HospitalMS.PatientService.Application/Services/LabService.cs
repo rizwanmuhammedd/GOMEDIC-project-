@@ -50,24 +50,23 @@ public class LabService : ILabService
 
         await _repo.UpdateAsync(order);
 
-        // Notify NotificationService to push live SignalR and persist notification
+        // Notify Patient via persistent Notification endpoint
         try
         {
-            await _httpClient.PostAsJsonAsync("http://localhost:5004/api/notifications/broadcast", new
+            await _httpClient.PostAsJsonAsync("http://localhost:5004/api/notifications", new
             {
-                GroupName = $"user_{order.PatientId}",
-                EventName = "ReceiveNotification",
-                Payload = new
-                {
-                    Title = isAbnormal ? "🔴 Abnormal Lab Result" : "✅ Lab Result Ready",
-                    Message = $"Your lab result for order #{orderId} is ready.",
-                    Type = isAbnormal ? "error" : "success"
-                }
+                UserId = order.PatientId,
+                Title = isAbnormal ? "🔴 Abnormal Lab Result" : "✅ Lab Result Ready",
+                Message = $"Your lab result for order #{orderId} is ready for review.",
+                Type = isAbnormal ? "error" : "success",
+                RelatedEntityId = orderId,
+                RelatedEntityType = "LabOrder",
+                TargetUrl = "/dashboard" // Or a specific lab results page if available
             });
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to notify NotificationService: {ex.Message}");
+            Console.WriteLine($"Failed to notify Patient: {ex.Message}");
         }
     }
 }

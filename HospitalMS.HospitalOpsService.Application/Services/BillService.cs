@@ -16,13 +16,15 @@ public class BillService : IBillService
     private readonly IPrescriptionRepository _prescriptionRepo;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _config;
+    private readonly ITenantProvider _tenant;
 
-    public BillService(IBillRepository repo, IPrescriptionRepository prescriptionRepo, IHttpClientFactory httpClientFactory, IConfiguration config)
+    public BillService(IBillRepository repo, IPrescriptionRepository prescriptionRepo, IHttpClientFactory httpClientFactory, IConfiguration config, ITenantProvider tenant)
     {
         _repo = repo;
         _prescriptionRepo = prescriptionRepo;
         _httpClientFactory = httpClientFactory;
         _config = config;
+        _tenant = tenant;
     }
 
     public async Task<BillDto> GenerateBillAsync(GenerateBillDto dto)
@@ -37,6 +39,9 @@ public class BillService : IBillService
         {
             BillNumber         = billNumber,
             PatientId          = dto.PatientId,
+            PatientName        = dto.PatientName,
+            PatientPhone       = dto.PatientPhone,
+            PatientAge         = dto.PatientAge,
             AdmissionId        = dto.AdmissionId,
             PrescriptionId     = dto.PrescriptionId,
             ConsultationCharge = dto.ConsultationCharge,
@@ -54,6 +59,27 @@ public class BillService : IBillService
         };
 
         var saved = await _repo.AddAsync(bill);
+
+        // Notify Patient (Persistent)
+        if (dto.PatientId > 0)
+        {
+            try
+            {
+                var client = _httpClientFactory.CreateClient();
+                await client.PostAsJsonAsync("http://localhost:5004/api/notifications", new
+                {
+                    UserId = dto.PatientId,
+                    Title = "🧾 New Bill Generated",
+                    Message = $"A new bill ({bill.BillNumber}) for ₹{bill.TotalAmount} has been generated.",
+                    Type = "warning",
+                    RelatedEntityId = saved.Id,
+                    RelatedEntityType = "Bill",
+                    TargetUrl = "/bills"
+                });
+            }
+            catch { }
+        }
+
         return await PopulatePatientDetailsAsync(Map(saved));
     }
 
@@ -117,13 +143,41 @@ public class BillService : IBillService
         return await PopulateBatchPatientDetailsAsync(dtos);
     }
 
+    public async Task<List<BillDto>> GetAllAsync()
+    {
+        var bills = await _repo.GetAllAsync();
+        var dtos = bills.Select(Map).ToList();
+        return await PopulateBatchPatientDetailsAsync(dtos);
+    }
+
     public async Task<RazorpayOrderResponseDto> CreateRazorpayOrderAsync(int billId)
     {
         var b = await _repo.GetByIdAsync(billId) ?? throw new Exception("Bill not found");
+        
+        // Fetch Tenant-specific Razorpay Settings from AuthService
         var key = _config["Razorpay:Key"];
         var secret = _config["Razorpay:Secret"];
-        
-        RazorpayClient client = new RazorpayClient(key, secret);
+
+        try
+        {
+            var client = _httpClientFactory.CreateClient();
+            var res = await client.GetAsync($"http://localhost:5001/api/auth/tenants/{_tenant.TenantId}/settings");
+            if (res.IsSuccessStatusCode)
+            {
+                var settings = await res.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                var tKey = settings.TryGetProperty("razorpayKey", out var pk) ? pk.GetString() : null;
+                var tSecret = settings.TryGetProperty("razorpaySecret", out var ps) ? ps.GetString() : null;
+                
+                if (!string.IsNullOrEmpty(tKey) && !string.IsNullOrEmpty(tSecret))
+                {
+                    key = tKey;
+                    secret = tSecret;
+                }
+            }
+        }
+        catch { /* Fallback to global config if auth service is down or not found */ }
+
+        RazorpayClient rzpClient = new RazorpayClient(key, secret);
 
         if (b.BalanceAmount <= 0) throw new Exception("Bill is already settled");
 
@@ -132,7 +186,7 @@ public class BillService : IBillService
         options.Add("currency", "INR");
         options.Add("receipt", $"BILL_{billId}");
 
-        Order order = client.Order.Create(options);
+        Order order = rzpClient.Order.Create(options);
 
         return new RazorpayOrderResponseDto
         {
@@ -150,6 +204,20 @@ public class BillService : IBillService
         {
             var secret = _config["Razorpay:Secret"];
             
+            // Try to get tenant secret for verification
+            try
+            {
+                var client = _httpClientFactory.CreateClient();
+                var res = await client.GetAsync($"http://localhost:5001/api/auth/tenants/{_tenant.TenantId}/settings");
+                if (res.IsSuccessStatusCode)
+                {
+                    var settings = await res.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                    var tSecret = settings.TryGetProperty("razorpaySecret", out var ps) ? ps.GetString() : null;
+                    if (!string.IsNullOrEmpty(tSecret)) secret = tSecret;
+                }
+            }
+            catch { }
+
             Dictionary<string, string> attributes = new Dictionary<string, string>();
             attributes.Add("razorpay_order_id", verificationDto.RazorpayOrderId);
             attributes.Add("razorpay_payment_id", verificationDto.RazorpayPaymentId);
@@ -247,7 +315,12 @@ public class BillService : IBillService
         try
         {
             var client = _httpClientFactory.CreateClient();
-            var request = new { GroupName = groupName, EventName = eventName, Payload = payload };
+            var request = new { 
+                TenantId = _tenant.TenantId,
+                GroupName = groupName, // Controller will prepend Tenant_{Id}_
+                EventName = eventName, 
+                Payload = payload 
+            };
             // Use direct port 5004 for notification broadcast
             await client.PostAsJsonAsync("http://localhost:5004/api/notifications/broadcast", request);
         }
@@ -256,13 +329,22 @@ public class BillService : IBillService
 
     private async Task<BillDto> PopulatePatientDetailsAsync(BillDto dto)
     {
-        // Default fallback if API fails
-        dto.PatientName = $"Patient #{dto.PatientId}";
+        // 1. For guest patients (ID 0), prioritize the name already stored on the bill
+        if (dto.PatientId == 0)
+        {
+            if (string.IsNullOrEmpty(dto.PatientName) || dto.PatientName == "Patient #0")
+                dto.PatientName = "Guest Patient";
+            
+            return dto;
+        }
+
+        // 2. For registered patients, default to placeholder and then try to fetch from Auth Service
+        if (string.IsNullOrEmpty(dto.PatientName)) 
+            dto.PatientName = $"Patient #{dto.PatientId}";
         
         try
         {
             var client = _httpClientFactory.CreateClient();
-            // Call AuthService directly on port 5001 for more reliability in local dev
             var res = await client.GetAsync($"http://localhost:5001/api/auth/users/{dto.PatientId}");
             if (res.IsSuccessStatusCode)
             {
@@ -284,14 +366,65 @@ public class BillService : IBillService
                 }
             }
         }
-        catch { /* Fallback to "Patient #ID" remains */ }
+        catch { /* Fallback remains */ }
         return dto;
     }
 
     private async Task<List<BillDto>> PopulateBatchPatientDetailsAsync(List<BillDto> dtos)
     {
-        var tasks = dtos.Select(PopulatePatientDetailsAsync);
-        await Task.WhenAll(tasks);
+        var patientIds = dtos.Where(d => d.PatientId > 0).Select(d => d.PatientId).Distinct().ToList();
+        if (!patientIds.Any()) return dtos;
+
+        try
+        {
+            var client = _httpClientFactory.CreateClient();
+            var idsParam = string.Join(",", patientIds);
+            var res = await client.GetAsync($"http://localhost:5001/api/auth/users/batch?ids={idsParam}");
+            
+            if (res.IsSuccessStatusCode)
+            {
+                var users = await res.Content.ReadFromJsonAsync<List<System.Text.Json.JsonElement>>();
+                var userMap = users.ToDictionary(
+                    u => u.GetProperty("id").GetInt32(),
+                    u => u
+                );
+
+                foreach (var dto in dtos)
+                {
+                    if (dto.PatientId == 0)
+                    {
+                        if (string.IsNullOrEmpty(dto.PatientName) || dto.PatientName == "Patient #0")
+                            dto.PatientName = "Guest Patient";
+                        continue;
+                    }
+
+                    if (userMap.TryGetValue(dto.PatientId, out var user))
+                    {
+                        var fullName = user.TryGetProperty("fullName", out var fn) ? fn.GetString() : null;
+                        if (!string.IsNullOrEmpty(fullName)) dto.PatientName = fullName;
+
+                        dto.PatientPhone = user.TryGetProperty("phone", out var p) ? p.GetString() : null;
+                        if (user.TryGetProperty("dateOfBirth", out var dobProp) && dobProp.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        {
+                            var dobStr = dobProp.GetString();
+                            if (!string.IsNullOrEmpty(dobStr))
+                            {
+                                var dob = DateOnly.Parse(dobStr);
+                                int age = DateTime.Today.Year - dob.Year;
+                                if (dob > DateOnly.FromDateTime(DateTime.Today.AddYears(-age))) age--;
+                                dto.PatientAge = age;
+                            }
+                        }
+                    }
+                    else if (string.IsNullOrEmpty(dto.PatientName))
+                    {
+                        dto.PatientName = $"Patient #{dto.PatientId}";
+                    }
+                }
+            }
+        }
+        catch { /* Fallback remains */ }
+
         return dtos;
     }
 
@@ -300,6 +433,9 @@ public class BillService : IBillService
         Id                 = b.Id,
         BillNumber         = b.BillNumber,
         PatientId          = b.PatientId,
+        PatientName        = b.PatientName ?? string.Empty,
+        PatientPhone       = b.PatientPhone,
+        PatientAge         = b.PatientAge,
         PrescriptionId     = b.PrescriptionId,
         ConsultationCharge = b.ConsultationCharge,
         MedicineCharge     = b.MedicineCharge,

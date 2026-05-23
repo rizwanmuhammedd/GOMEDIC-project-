@@ -52,4 +52,31 @@ public class ChatController : ControllerBase
         await _chatRepo.MarkAsReadAsync(patientId);
         return NoContent();
     }
+
+    [HttpPatch("read-hospital/{patientId}")]
+    public async Task<IActionResult> MarkHospitalAsRead(string patientId)
+    {
+        await _chatRepo.MarkHospitalMessagesAsReadAsync(patientId);
+        return NoContent();
+    }
+
+    [HttpGet("unread-count")]
+    public async Task<IActionResult> GetUnreadCount()
+    {
+        var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var role = User.FindFirst(ClaimTypes.Role)?.Value ?? 
+                   User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+
+        if (role == "Receptionist")
+        {
+            var count = await _chatRepo.GetTotalUnreadCountAsync(null);
+            return Ok(new { count });
+        }
+        else
+        {
+            if (string.IsNullOrEmpty(currentUserId)) return BadRequest();
+            var count = await _chatRepo.GetTotalUnreadCountAsync(currentUserId);
+            return Ok(new { count });
+        }
+    }
 }

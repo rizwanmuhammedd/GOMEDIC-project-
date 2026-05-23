@@ -5,3 +5,10 @@ node_modules/
 *.user
 *.suo
 *.log
+.env
+hospitalms-frontend/.env
+dist/
+build/
+terraform/.terraform/
+terraform/*.tfstate*
+*.pem

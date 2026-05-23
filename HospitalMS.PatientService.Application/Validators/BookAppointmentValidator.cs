@@ -18,8 +18,16 @@ public class BookAppointmentValidator : AbstractValidator<BookAppointmentDto>
             .InclusiveBetween(0, 150).WithMessage("Valid patient age is required");
 
         RuleFor(x => x.AppointmentDate)
-            .GreaterThanOrEqualTo(DateOnly.FromDateTime(DateTime.Today))
-            .WithMessage("Appointment must not be in the past");
+            .NotEmpty().WithMessage("Appointment date is required")
+            .Must(dateStr => 
+            {
+                if (DateOnly.TryParse(dateStr, out var date))
+                {
+                    return date >= DateOnly.FromDateTime(DateTime.Today);
+                }
+                return false;
+            })
+            .WithMessage("Appointment date must be a valid date in the future or today (YYYY-MM-DD)");
 
         RuleFor(x => x.ChiefComplaint)
             .MaximumLength(500);

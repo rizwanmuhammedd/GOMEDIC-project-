@@ -24,7 +24,8 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Register([FromBody] RegisterRequestDto dto)
     {
-        var result = await _authService.RegisterAsync(dto);
+        var subdomain = Request.Headers["X-Tenant-Subdomain"].FirstOrDefault();
+        var result = await _authService.RegisterAsync(dto, subdomain);
         return Ok(new { message = result });
     }
 
@@ -34,7 +35,10 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var user = await _authService.CreateStaffAsync(dto);
+            var tenantIdClaim = User.FindFirst("TenantId")?.Value;
+            int tenantId = tenantIdClaim != null ? int.Parse(tenantIdClaim) : 1;
+
+            var user = await _authService.CreateStaffAsync(dto, tenantId);
             return Ok(new { 
                 id = user.Id, 
                 email = user.Email, 
@@ -71,6 +75,49 @@ public class AuthController : ControllerBase
             dateOfBirth = user.DateOfBirth,
             profileImageUrl = user.ProfileImageUrl
         });
+    }
+
+    [HttpGet("users/batch")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetUsersByIds([FromQuery] string ids)
+    {
+        if (string.IsNullOrEmpty(ids)) return BadRequest();
+        var idList = ids.Split(',').Select(int.Parse).ToList();
+        var users = await _authService.GetUsersByIdsAsync(idList);
+        return Ok(users.Select(user => new {
+            id = user.Id,
+            email = user.Email,
+            fullName = user.FullName,
+            role = user.Role,
+            phone = user.Phone,
+            dateOfBirth = user.DateOfBirth,
+            profileImageUrl = user.ProfileImageUrl
+        }));
+    }
+
+    [HttpGet("tenants/{id}/settings")]
+    [AllowAnonymous] // Internal use
+    public async Task<IActionResult> GetTenantSettings(int id)
+    {
+        var tenant = await _authService.GetTenantByIdAsync(id);
+        if (tenant == null) return NotFound();
+        return Ok(new {
+            id = tenant.Id,
+            name = tenant.Name,
+            razorpayKey = tenant.RazorpayKey,
+            razorpaySecret = tenant.RazorpaySecret
+        });
+    }
+
+    [HttpGet("tenants/resolve/{subdomain}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResolveTenant(string subdomain)
+    {
+        var tenant = await _authService.GetTenantByIdAsync(0); // Dummy call to get repo via service if needed, but I'll use repo directly if possible or add to service
+        // Better: Add ResolveSubdomain to IAuthService
+        var t = await _authService.GetTenantBySubdomainAsync(subdomain);
+        if (t == null) return NotFound();
+        return Ok(new { id = t.Id, name = t.Name, subdomain = t.Subdomain });
     }
 
     [HttpDelete("users/{id}")]
@@ -119,7 +166,8 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var result = await _authService.LoginWithGoogleAsync(dto);
+            var subdomain = Request.Headers["X-Tenant-Subdomain"].FirstOrDefault();
+            var result = await _authService.LoginWithGoogleAsync(dto, subdomain);
             return Ok(result);
         }
         catch (Exception ex)
